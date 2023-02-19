@@ -45,7 +45,7 @@ int main()
 	printf("%0.25f\n", Sum);
 	printf("\n");
 
-	clock_t end_al = clock();
+	clock_t end_all = clock();
 	time_all += (double)(end_all - begin_all) / CLOCKS_PER_SEC;
 	printf("%f\n", time_all);
 	
