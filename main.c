@@ -11,7 +11,7 @@ double arr[N];
 
 int main()
 {
-	double time_spent = 0.0;
+	double time_spent1 = 0.0;
 
 	clock_t begin1 = clock();
 
@@ -24,7 +24,7 @@ int main()
 	clock_t end1 = clock();
 	time_spent1 += (double)(end1 - begin1) / CLOCKS_PER_SEC;
 
-	double time_spent = 0.0;
+	double time_spent2 = 0.0;
 	
 	clock_t begin2 = clock();
 	
