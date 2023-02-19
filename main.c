@@ -11,6 +11,9 @@ double arr[N];
 
 int main()
 {
+	double time_all = 0.0;
+	clock_t begin_all = clock();
+	
 	double time_spent1 = 0.0;
 
 	clock_t begin1 = clock();
@@ -40,6 +43,11 @@ int main()
 	printf("%f\n", time_spent1);
 	printf("%f\n", time_spent2);
 	printf("%0.25f\n", Sum);
+	printf("\n");
 
+	clock_t end_al = clock();
+	time_all += (double)(end_all - begin_all) / CLOCKS_PER_SEC;
+	printf("%f\n", time_all);
+	
 	return 0;
 }
