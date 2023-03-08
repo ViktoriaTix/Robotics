@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <time.h>
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 
-void heat_equation_2d(int n, double k, int max_iters, double tol, int* iters, double* err) {
+void heat_equation_2d(int n, double k, int max_iters, double tol, int* iters, double* err)
+{
     // Allocate memory for the grid with ghost cells
     double** u = (double**)malloc((n + 2) * sizeof(double*));
     for (int i = 0; i < n + 2; i++) {
@@ -56,38 +58,49 @@ void heat_equation_2d(int n, double k, int max_iters, double tol, int* iters, do
                 u[i][j] = u_new[i][j];
             }
         }
-        // Increment the iteration counter
-        (*iters)++;
-        // Free memory for u_new
+        // Free memory for the new grid
         for (int i = 0; i < n + 2; i++) {
             free(u_new[i]);
         }
         free(u_new);
+        // Increment the iteration counter
+        (*iters)++;
+        // Set the error
+        *err = err_max;
     }
-    // Calculate the final error
-    double err_final = 0.0;
-    for (int i = 1; i <= n; i++) {
-        for (int j = 1; j <= n; j++) {
-            err_final += fabs(u[i][j] - (25 + i * j * h * h));
-        }
-    }
-    *err = err_final / (double)(n * n);
-    // Free memory for u
+    // Free memory for the grid
     for (int i = 0; i < n + 2; i++) {
         free(u[i]);
     }
     free(u);
 }
 
-int main() {
-    int n = 100;
-    double k = 1;
-    int max_iters = 10000;
-    double tol = 1e-5;
+int main(int argc, char** argv) {
+
+    double time_spent1 = 0.0;
+
+    clock_t begin1 = clock(); 
+
+    // Parse command line arguments
+    if (argc != 4) {
+        printf("Usage: %s <accuracy> <grid size> <number of iterations>\n", argv[0]);
+        return 1;
+    }
+    double tol = atof(argv[1]);
+    int n = atoi(argv[2]);
+    int max_iters = atoi(argv[3]);
+    // Perform the heat equation computation
     int iters;
     double err;
-    heat_equation_2d(n, k, max_iters, tol, &iters, &err);
-    printf("Number of iterations: %d\n", iters);
-    printf("Final error: %g\n", err);
+    heat_equation_2d(n, 0.1, max_iters, tol, &iters, &err);
+    // Print the results
+
+    clock_t end1 = clock();
+    time_spent1 += (double)(end1 - begin1) / CLOCKS_PER_SEC;
+
+    printf("Iterations: %d\n", iters);
+    printf("Error: %.10f\n", err);
+    printf("%f\n", time_spent1);
+
     return 0;
 }
