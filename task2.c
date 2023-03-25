@@ -2,11 +2,18 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define Matrix 1024
-#define accuracy 1e-6
-#define iterations 1000000
+int main(int argc, char* argv[]) {
+    // Check if enough arguments are provided
+    if (argc < 4) {
+        printf("Usage: ./program_name Matrix accuracy iterations\n");
+        return 1;
+    }
 
-int main() {
+    // Convert command line arguments to integers
+    int Matrix = atoi(argv[1]);
+    double accuracy = atof(argv[2]);
+    int iterations = atoi(argv[3]);
+    
     // Allocate 2D arrays on host memory
     double* arr = (double*)malloc(Matrix * Matrix * sizeof(double));
     double* array_new = (double*)malloc(Matrix * Matrix * sizeof(double));
