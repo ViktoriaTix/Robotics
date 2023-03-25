@@ -1,8 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <time.h>
 
 int main(int argc, char* argv[]) {
+    
+    double time_spent1 = 0.0;
+
+    clock_t begin1 = clock(); 
+    
     // Check if enough arguments are provided
     if (argc < 4) {
         printf("Usage: ./program_name Matrix accuracy iterations\n");
@@ -70,7 +76,7 @@ int main(int argc, char* argv[]) {
 
             // Print progress
             if (iter % 100 == 0) {
-                printf("%d, %0.6lf\n", iter, err);
+                //printf("%d, %0.6lf\n", iter, err);
             }
         }
     }
@@ -80,5 +86,10 @@ int main(int argc, char* argv[]) {
     free(arr);
     free(array_new);
 
+    
+    clock_t end1 = clock();
+    time_spent1 += (double)(end1 - begin1) / CLOCKS_PER_SEC;
+    printf("%f\n", time_spent1);
+    
     return 0;
 }
