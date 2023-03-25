@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
         }
 
 
-        while (err > accuracy && iter < iterations) {
+        while (err > accuracy && err > 0.000001 && iter < iterations) {
             // Compute new values
             err = 0;
 #pragma acc kernels loop independent reduction(max:err)
