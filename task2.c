@@ -38,7 +38,7 @@ int main(int argc, char* argv[]) {
     double err = accuracy + 1;
     int iter = 0;
 
-#pragma acc data copy(arr[0:Matrix*Matrix], arrNew[0:Matrix*Matrix])
+#pragma acc data copy(arr[0:Matrix*Matrix], array_new[0:Matrix*Matrix])
     {
 #pragma acc kernels loop independent
         for (int j = 1; j < Matrix; j++) {
