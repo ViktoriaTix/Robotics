@@ -1,76 +1,96 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <time.h>
 #include <cuda_runtime.h>
-#include "cublas_v2.h"
+#include <cublas_v2.h>
 
-#define M 1024
-#define TOL 1e-6
-#define ITER_MAX 1000000
+int main(int argc, char* argv[]) {
+    
+    double time_spent1 = 0.0;
 
-int main() {
+    clock_t begin1 = clock(); 
+    
+    // Check if enough arguments are provided
+    if (argc < 4) {
+        printf("Usage: ./program_name Matrix accuracy iterations\n");
+        return 1;
+    }
+
+    // Convert command line arguments to integers
+    int Matrix = atoi(argv[1]);
+    double accuracy = atof(argv[2]);
+    int iterations = atoi(argv[3]);
+    
     // Allocate 2D arrays on host memory
-    double *arr = (double *)malloc(M * M * sizeof(double));
-    double *arrNew = (double *)malloc(M * M * sizeof(double));
+    double* arr = (double*)malloc(Matrix * Matrix * sizeof(double));
+    double* array_new = (double*)malloc(Matrix * Matrix * sizeof(double));
     // Initialize arrays to zero
-    for (int i = 0; i < M * M; i++) {
+    for (int i = 0; i < Matrix * Matrix; i++) {
         arr[i] = 0;
-        arrNew[i] = 0;
+        array_new[i] = 0;
     }
     // Set boundary conditions
-    arr[0*M+0] = 10;
-    arr[0*M+M-1] = 20;
-    arr[(M-1)*M+0] = 30;
-    arr[(M-1)*M+M-1] = 20;
+    arr[0 * Matrix + 0] = 10;
+    arr[0 * Matrix + Matrix - 1] = 20;
+    arr[(Matrix - 1) * Matrix + 0] = 30;
+    arr[(Matrix - 1) * Matrix + Matrix - 1] = 20;
 
     // Main loop
-    double err = TOL + 1;
+    double err = accuracy + 1;
     int iter = 0;
 
-    #pragma acc data copy(arr[0:M*M], arrNew[0:M*M])
-    {
-        #pragma acc kernels loop independent
-        for(int j = 1; j < M; j++){
-            arr[0*M+j] = (arr[0*M+M-1] - arr[0*M+0])/(M-1) + arr[0*M+j-1];   //top
-            arr[(M-1)*M+j] = (arr[(M-1)*M+M-1] - arr[(M-1)*M+0])/(M-1) + arr[(M-1)*M+j-1]; //bottom
-            arr[j*M+0] = (arr[(M-1)*M+0] - arr[0*M+0])/(M-1) + arr[(j-1)*M+0]; //left
-            arr[j*M+M-1] = (arr[(M-1)*M+M-1] - arr[0*M+M-1])/(M-1) + arr[(j-1)*M+M-1]; //right
+    // Allocate device memory
+    double* d_arr;
+    double* d_array_new;
+    cudaMalloc((void**)&d_arr, Matrix * Matrix * sizeof(double));
+    cudaMalloc((void**)&d_array_new, Matrix * Matrix * sizeof(double));
+    cudaMemcpy(d_arr, arr, Matrix * Matrix * sizeof(double), cudaMemcpyHostToDevice);
+
+    cublasHandle_t handle;
+    cublasCreate(&handle);
+
+    while (err > accuracy && err > 0.000001 && iter < iterations) {
+        // Compute new values
+        err = 0;
+
+        double alpha = 0.25;
+        double beta = 0.0;
+
+        cublasDgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, Matrix - 2, Matrix - 2, Matrix,
+                    &alpha, d_arr + Matrix + 1, Matrix, d_arr + 1, Matrix, &beta, d_array_new + Matrix + 1, Matrix);
+        cudaDeviceSynchronize();
+
+        // Calculate error using cuBLAS reduction
+        double* d_err;
+        cudaMalloc((void**)&d_err, sizeof(double));
+
+        cublasIdamax(handle, Matrix * Matrix - 1, d_array_new + 1, 1, d_err);
+        cudaMemcpy(&err, d_err, sizeof(double), cudaMemcpyDeviceToHost);
+
+        // Update values
+        cudaMemcpy(d_arr, d_array_new, Matrix * Matrix * sizeof(double), cudaMemcpyDeviceToDevice);
+
+        cudaFree(d_err);
+
+        err = sqrt(err); // square root to get L2 norm error
+
+        iter++;
+
+        // Print progress
+        if (iter % 100 == 0) {
+            //printf("%d, %0.6lf\n", iter, err);
         }
-
-        cublasHandle_t handle;
-        cublasCreate(&handle);
-
-        while (err > TOL && iter < ITER_MAX) {
-            // Compute new values
-            err = 0;
-            #pragma acc kernels loop independent reduction(max:err)
-            for (int j = 1; j < M - 1; j++) {
-                #pragma acc loop reduction(max:err)
-                for (int i = 1; i < M - 1; i++) {
-                    int index = j*M+i;
-                    arrNew[index] = 0.25 * (arr[index + M] + arr[index - M] +
-                                             arr[index - 1] + arr[index + 1]);
-                    err = fmax(err, fabs(arrNew[index] - arr[index]));
-                }
-            }
-            // Update values
-            cublasDcopy(handle, M * M, arrNew, 1, arr, 1);
-
-            iter++;
-            
-            // Print progress
-            if (iter % 100 == 0) {
-                printf("%d, %0.6lf\n", iter, err);
-            }
-        }
-
-        cublasDestroy(handle);
     }
-    
+
+    cublasDestroy(handle);
+    cudaFree(d_arr);
+    cudaFree(d_array_new);
+
     printf("Final result: %d, %0.6lf\n", iter, err);
     // Free memory
     free(arr);
-    free(arrNew);
+    free(array_new);
     
     return 0;
 }
