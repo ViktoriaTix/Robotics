@@ -64,8 +64,8 @@ int main(int argc, char* argv[]) {
         // Calculate error using cuBLAS reduction
         double* d_err;
         cudaMalloc((void**)&d_err, sizeof(double));
-
-        cublasIdamax(handle, Matrix * Matrix - 1, d_array_new + 1, 1, d_err);
+        
+        cublasIdamax(handle, int(Matrix * Matrix - 1), d_array_new + 1, 1, d_err);
         cudaMemcpy(&err, d_err, sizeof(double), cudaMemcpyDeviceToHost);
 
         // Update values
