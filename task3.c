@@ -65,12 +65,12 @@ int main(int argc, char* argv[]) {
         double* d_err;
         cudaMalloc((void**)&d_err, sizeof(double));
         
-        cublasIdamax(handle, Matrix * Matrix - 1, (int*)d_array_new + 1, 1, (int*)d_err);
-        cudaMemcpy(&err, d_err, sizeof(double), cudaMemcpyDeviceToHost);
-
+        cublasIdamax(handle, int(Matrix * Matrix - 1), d_array_new + 1, 1, d_err); 
+        cudaMemcpy(&err, d_err, sizeof(double), cudaMemcpyDeviceToHost); 
+        cudaFree(d_err);
+        
         // Update values
         cudaMemcpy(d_arr, d_array_new, Matrix * Matrix * sizeof(double), cudaMemcpyDeviceToDevice);
-
         cudaFree(d_err);
 
         err = sqrt(err); // square root to get L2 norm error
