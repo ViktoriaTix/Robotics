@@ -33,28 +33,28 @@ int main(int argc, char* argv[]) {
     arr[0 * Matrix + Matrix - 1] = 20;
     arr[(Matrix - 1) * Matrix + 0] = 30;
     arr[(Matrix - 1) * Matrix + Matrix - 1] = 20;
-
+    
+    for (int j = 1; j < Matrix; j++) {
+            arr[0 * Matrix + j] = (arr[0 * Matrix + Matrix - 1] - arr[0 * Matrix + 0]) / (Matrix - 1) + arr[0 * Matrix + j - 1];   //top
+            arr[(Matrix - 1) * Matrix + j] = (arr[(Matrix - 1) * Matrix + Matrix - 1] - arr[(Matrix - 1) * Matrix + 0]) / (Matrix - 1) + arr[(Matrix - 1) * Matrix + j - 1]; //bottom
+            arr[j * Matrix + 0] = (arr[(Matrix - 1) * Matrix + 0] - arr[0 * Matrix + 0]) / (Matrix - 1) + arr[(j - 1) * Matrix + 0]; //left
+            arr[j * Matrix + Matrix - 1] = (arr[(Matrix - 1) * Matrix + Matrix - 1] - arr[0 * Matrix + Matrix - 1]) / (Matrix - 1) + arr[(j - 1) * Matrix + Matrix - 1]; //right
+        }
     // Main loop
     double err = accuracy + 1;
     int iter = 0;
 
 #pragma acc data copy(arr[0:Matrix*Matrix], array_new[0:Matrix*Matrix])
     {
-#pragma acc kernels loop independent
-        for (int j = 1; j < Matrix; j++) {
-            arr[0 * Matrix + j] = (arr[0 * Matrix + Matrix - 1] - arr[0 * Matrix + 0]) / (Matrix - 1) + arr[0 * Matrix + j - 1];   //top
-            arr[(Matrix - 1) * Matrix + j] = (arr[(Matrix - 1) * Matrix + Matrix - 1] - arr[(Matrix - 1) * Matrix + 0]) / (Matrix - 1) + arr[(Matrix - 1) * Matrix + j - 1]; //bottom
-            arr[j * Matrix + 0] = (arr[(Matrix - 1) * Matrix + 0] - arr[0 * Matrix + 0]) / (Matrix - 1) + arr[(j - 1) * Matrix + 0]; //left
-            arr[j * Matrix + Matrix - 1] = (arr[(Matrix - 1) * Matrix + Matrix - 1] - arr[0 * Matrix + Matrix - 1]) / (Matrix - 1) + arr[(j - 1) * Matrix + Matrix - 1]; //right
-        }
 
-
-        while (err > accuracy && err > 0.000001 && iter < iterations) {
+        while (err > accuracy  && iter < iterations) {
             // Compute new values
             err = 0;
-#pragma acc kernels loop independent reduction(max:err)
+#pragma acc parallel reduction(max:err)
+{
+    #pragma acc loop independent
             for (int j = 1; j < Matrix - 1; j++) {
-#pragma acc loop reduction(max:err)
+#pragma acc loop independent
                 for (int i = 1; i < Matrix - 1; i++) {
                     int index = j * Matrix + i;
                     array_new[index] = 0.25 * (arr[index + Matrix] + arr[index - Matrix] +
@@ -62,6 +62,7 @@ int main(int argc, char* argv[]) {
                     err = fmax(err, fabs(array_new[index] - arr[index]));
                 }
             }
+}
             // Update values
 #pragma acc kernels loop independent
             for (int j = 1; j < Matrix - 1; j++) {
