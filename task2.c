@@ -46,7 +46,6 @@ int main(int argc, char* argv[]) {
 
 #pragma acc data copy(arr[0:Matrix*Matrix], array_new[0:Matrix*Matrix])
     {
-
         while (err > accuracy  && iter < iterations) {
             // Compute new values
             err = 0;
@@ -74,11 +73,6 @@ int main(int argc, char* argv[]) {
             }
 
             iter++;
-
-            // Print progress
-            if (iter % 100 == 0) {
-                //printf("%d, %0.6lf\n", iter, err);
-            }
         }
     }
 
