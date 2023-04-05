@@ -2,15 +2,14 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
-#include <cuda_runtime.h>
 #include <cublas_v2.h>
 
 int main(int argc, char* argv[]) {
-    
+
     double time_spent1 = 0.0;
 
-    clock_t begin1 = clock(); 
-    
+    clock_t begin1 = clock();
+
     // Check if enough arguments are provided
     if (argc < 4) {
         printf("Usage: ./program_name Matrix accuracy iterations\n");
@@ -21,7 +20,7 @@ int main(int argc, char* argv[]) {
     int Matrix = atoi(argv[1]);
     double accuracy = atof(argv[2]);
     int iterations = atoi(argv[3]);
-    
+
     // Allocate 2D arrays on host memory
     double* arr = (double*)malloc(Matrix * Matrix * sizeof(double));
     double* array_new = (double*)malloc(Matrix * Matrix * sizeof(double));
@@ -36,54 +35,67 @@ int main(int argc, char* argv[]) {
     arr[(Matrix - 1) * Matrix + 0] = 30;
     arr[(Matrix - 1) * Matrix + Matrix - 1] = 20;
 
+    for (int j = 1; j < Matrix; j++) {
+        arr[0 * Matrix + j] = (arr[0 * Matrix + Matrix - 1] - arr[0 * Matrix + 0]) / (Matrix - 1) + arr[0 * Matrix + j - 1];   //top
+        arr[(Matrix - 1) * Matrix + j] = (arr[(Matrix - 1) * Matrix + Matrix - 1] - arr[(Matrix - 1) * Matrix + 0]) / (Matrix - 1) + arr[(Matrix - 1) * Matrix + j - 1]; //bottom
+        arr[j * Matrix + 0] = (arr[(Matrix - 1) * Matrix + 0] - arr[0 * Matrix + 0]) / (Matrix - 1) + arr[(j - 1) * Matrix + 0]; //left
+        arr[j * Matrix + Matrix - 1] = (arr[(Matrix - 1) * Matrix + Matrix - 1] - arr[0 * Matrix + Matrix - 1]) / (Matrix - 1) + arr[(j - 1) * Matrix + Matrix - 1]; //right
+    }
+
     // Main loop
     double err = accuracy + 1;
     int iter = 0;
 
-    // Allocate device memory
+    // Create cuBLAS handle
+    cublasHandle_t handle;
+    cublasCreate(&handle);
+
+    // Allocate 2D arrays on device memory
     double* d_arr;
     double* d_array_new;
     cudaMalloc((void**)&d_arr, Matrix * Matrix * sizeof(double));
     cudaMalloc((void**)&d_array_new, Matrix * Matrix * sizeof(double));
+
+    // Copy data from host to device
     cudaMemcpy(d_arr, arr, Matrix * Matrix * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_array_new, array_new, Matrix * Matrix * sizeof(double), cudaMemcpyHostToDevice);
 
-    cublasHandle_t handle;
-    cublasCreate(&handle);
-
-    while (err > accuracy && err > 0.000001 && iter < iterations) {
+    while (err > accuracy && iter < iterations) {
         // Compute new values
         err = 0;
 
-        double alpha = 0.25;
-        double beta = 0.0;
-
-        cublasDgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, Matrix - 2, Matrix - 2, Matrix,
-                    &alpha, d_arr + Matrix + 1, Matrix, d_arr + 1, Matrix, &beta, d_array_new + Matrix + 1, Matrix);
-        cudaDeviceSynchronize();
-
-        // Calculate error using cuBLAS reduction
-        double* d_err;
-        cudaMalloc((void**)&d_err, sizeof(double));
-        
-        cublasIdamax(handle, Matrix * Matrix - 1, d_array_new + 1, 1, d_err);
-        cudaMemcpy(&err, d_err, sizeof(double), cudaMemcpyDeviceToHost); 
-        cudaFree(d_err);
-        
-        // Update values
-        cudaMemcpy(d_arr, d_array_new, Matrix * Matrix * sizeof(double), cudaMemcpyDeviceToDevice);
-        cudaFree(d_err);
-
-        err = sqrt(err); // square root to get L2 norm error
-
-        iter++;
-
-        // Print progress
-        if (iter % 100 == 0) {
-            //printf("%d, %0.6lf\n", iter, err);
+#pragma acc data copyin(d_arr[0:Matrix*Matrix]) copy(d_array_new[0:Matrix*Matrix])
+        {
+#pragma acc parallel reduction(max:err)
+            {
+#pragma acc loop independent
+                for (int j = 1; j < Matrix - 1; j++) {
+#pragma acc loop independent
+                    for (int i = 1; i < Matrix - 1; i++) {
+                        int index = j * Matrix + i;
+                        array_new[index] = 0.25 * (arr[index + Matrix] + arr[index - Matrix] +
+                            arr[index - 1] + arr[index + 1]);
+                        err = fmax(err, fabs(array_new[index] - arr[index]));
+                    }
+                }
+            }
+            // Update values
+#pragma acc kernels loop independent
+            for (int j = 1; j < Matrix - 1; j++) {
+#pragma acc loop
+                for (int i = 1; i < Matrix - 1; i++) {
+                    int index = j * Matrix + i;
+                    arr[index] = array_new[index];
+                }
+            }
         }
+        iter++;
     }
 
-    cublasDestroy(handle);
+    // Copy data from device to host
+    cudaMemcpy(arr, d_arr, Matrix * Matrix * sizeof(double), cudaMemcpyDeviceToHost);
+
+    // Free memory on device
     cudaFree(d_arr);
     cudaFree(d_array_new);
 
@@ -91,11 +103,11 @@ int main(int argc, char* argv[]) {
     // Free memory
     free(arr);
     free(array_new);
-    
-      
+
+
     clock_t end1 = clock();
     time_spent1 += (double)(end1 - begin1) / CLOCKS_PER_SEC;
     printf("%f\n", time_spent1);
-    
+
     return 0;
 }
