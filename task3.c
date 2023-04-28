@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
     cublasHandle_t handle;
     cublasCreate(&handle);
 
-    // Allocate device memory for error
+    // Allocate device memory for error GPU
     double* err_dev;
     cudaMalloc((void**)&err_dev, sizeof(double));
 
@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Update values
+        // Update values копирования данных из массива array_new в массив arr
         cublasSetPointerMode(handle, CUBLAS_POINTER_MODE_HOST);
         cublasScopy(handle, Matrix * Matrix, array_new, 1, arr, 1);
         iter++;
@@ -91,7 +91,7 @@ int main(int argc, char* argv[]) {
         // Copy error to device and compute max error
         cudaMemcpy(err_dev, &err, sizeof(double), cudaMemcpyHostToDevice);
         cublasSetPointerMode(handle, CUBLAS_POINTER_MODE_DEVICE);
-        cublasDnrm2(handle, 1, err_dev, 1, &err_dev);
+        cublasDnrm2(handle, 1, err_dev, 1, &err_dev); //евклидова норма
         cudaMemcpy(&err, err_dev, sizeof(double), cudaMemcpyDeviceToHost);
     }
 
