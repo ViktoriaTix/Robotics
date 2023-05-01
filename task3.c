@@ -55,7 +55,8 @@ int main(int argc, char* argv[]) {
 
     // Create cuBLAS handle and initialize the handle to use the CUBLAS library
     cublasHandle_t handle;
-    cublasStatus_t status = cublasCreate(&handle);
+    cublasStatus_t status;
+    cublasCreate(&handle);
     if (status != CUBLAS_STATUS_SUCCESS) {
         printf("Failed to create cublas handle\n");
         return 1;
