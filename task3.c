@@ -77,10 +77,13 @@ int main(int argc, char* argv[]) {
         while (diff > accuracy && count < iterations) 
         {
             // Copy array from device memory to host memory
-            cudaMemcpy(array_new, arr_d, Matrix * Matrix * sizeof(double), cudaMemcpyDeviceToHost);
+            cudaMemcpy(array_new, arr_d, Matrix * Matrix * sizeof(double), cudaMemcpyDeviceToHost); //избавиться от копирования
             diff = 0.0;
             // Perform Jacobi update
     #pragma acc loop independent
+            // создание и копирование с помощью деректив openacc
+// pragma acc present (
+            )
             for (int i = 1; i < Matrix - 1; i++) {
         #pragma acc loop independent
                 for (int j = 1; j < Matrix - 1; j++) {
