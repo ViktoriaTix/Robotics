@@ -57,11 +57,7 @@ int main(int argc, char* argv[]) {
     cublasHandle_t handle;
     cublasStatus_t status;
     cublasCreate(&handle);
-    if (status != CUBLAS_STATUS_SUCCESS) {
-        printf("Failed to create cublas handle\n");
-        return 1;
-    }
-
+ 
     // Allocate 1D array on device memory
     double* arr_d;
     cudaMalloc((void**)&arr_d, Matrix * Matrix * sizeof(double));
