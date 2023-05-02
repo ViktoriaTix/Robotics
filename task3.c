@@ -25,13 +25,13 @@ int main(int argc, char* argv[]) {
     
     // Allocate 1D arrays on host memory
     double* arr = (double*)malloc(Matrix * Matrix * sizeof(double));
-    double* array_new = (double*)malloc(Matrix * Matrix * sizeof(double));
+    double* arr_new = (double*)malloc(Matrix * Matrix * sizeof(double));
     double* arr_err = (double*)malloc(Matrix * Matrix * sizeof(double));
     
     // Initialize arrays to zero
     for (int i = 0; i < Matrix * Matrix; i++) {
         arr[i] = 0;
-        array_new[i] = 0;
+        arr_new[i] = 0;
         arr_err[i] = 0;
     }
     
@@ -40,91 +40,83 @@ int main(int argc, char* argv[]) {
     arr[Matrix - 1] = 20;
     arr[(Matrix - 1) * Matrix] = 30;
     arr[Matrix * Matrix - 1] = 20;
-    
-    for (int j = 1; j < Matrix - 1; j++) {
-        //top
-        arr[j] = (arr[Matrix + j] + arr[j - 1] + arr[j + 1] + arr[2 * Matrix + j]) / 4;
-        //bottom
-        arr[(Matrix - 1) * Matrix + j] = (arr[(Matrix - 2) * Matrix + j] + arr[(Matrix - 1) * Matrix + j - 1] + arr[(Matrix - 1) * Matrix + j + 1] + arr[(Matrix - 2) * Matrix + j]) / 4;
-        //left
-        arr[j * Matrix] = (arr[j * Matrix + 1] + arr[(j - 1) * Matrix] + arr[(j + 1) * Matrix] + arr[(j + 2) * Matrix]) / 4;
-        //right
-        arr[(j + 1) * Matrix - 1] = (arr[(j + 1) * Matrix - 2] + arr[j * Matrix + Matrix - 1] + arr[(j + 2) * Matrix - 1] + arr[(j - 1) * Matrix + Matrix - 1]) / 4;
+
+    arr_new[0] = 10;
+    arr_new[Matrix - 1] = 20;
+    arr_new[(Matrix - 1) * Matrix] = 30;
+    arr_new[Matrix * Matrix - 1] = 20;
+ 
+    for(int i = 1; i < Matrix - 1; i++)
+    {
+        arr[i*Matrix] = arr[(i-1)*Matrix]+ (10 / (Matrix - 1));
+        arr[i] = arr[i-1] + (10 / (Matrix - 1));
+        arr[(Matrix-1)*Matrix + i] = arr[(Matrix-1)*Matrix + i-1] + (10 / (Matrix - 1));
+        arr[i*Matrix + (Matrix-1)] = arr[(i-1)*Matrix + (Matrix-1)] + (10 / (Matrix - 1));
+
+        arr_new[i*Matrix] = arr_new[(i-1)*Matrix]+ (10 / (Matrix - 1));
+        arr_new[i] = arr_new[i-1] + (10 / (Matrix - 1));
+        arr_new[(Matrix-1)*Matrix + i] = arr_new[(Matrix-1)*Matrix + i-1] + (10 / (Matrix - 1));
+        arr_new[i*Matrix + (Matrix-1)] = arr_new[(i-1)*Matrix + (Matrix-1)] + (10 / (Matrix - 1));
     }
 
 
     // Create cuBLAS handle and initialize the handle to use the CUBLAS library
     cublasHandle_t handle;
-    cublasStatus_t status;
-    cublasCreate(&handle);
- 
-    // Allocate 1D array on device memory
-    double* arr_d;
-    cudaMalloc((void**)&arr_d, Matrix * Matrix * sizeof(double));
 
-    // Copy array from host memory to device memory
-    cudaMemcpy(arr_d, arr, Matrix * Matrix * sizeof(double), cudaMemcpyHostToDevice);
+    cublasStatus_t status;
+
+    cublasCreate(&handle);
 
     // Initialize variables
     double diff = 1.0;
     int count = 0;
     double* temp;
+    int ind = 0;
 
     double alpha = 1.0;
     double beta = -1.0;
 
-            // Perform Jacobi iteration
+    #pragma acc data copyin(arr_new[:Matrix * Matrix],arr[:Matrix * Matrix]) create(sum,arr_err[:Matrix * Matrix])
+    {
+        // Perform Jacobi iteration
         while (diff > accuracy && count < iterations) 
         {
-            // Copy array from device memory to host memory
-            cudaMemcpy(array_new, arr_d, Matrix * Matrix * sizeof(double), cudaMemcpyDeviceToHost); //избавиться от копирования
-            diff = 0.0;
+            #pragma acc data present(arr,arr_new)
             // Perform Jacobi update
-    #pragma acc loop independent
-            // создание и копирование с помощью деректив openacc
-// pragma acc present (
-            )
+            #pragma acc loop independent
             for (int i = 1; i < Matrix - 1; i++) {
-        #pragma acc loop independent
+                #pragma acc loop independent
                 for (int j = 1; j < Matrix - 1; j++) {
-                    double sum = 0.0;
-                    
-                    // Compute sum of neighboring elements
-                    sum = array_new[(i - 1) * Matrix + j] + array_new[(i + 1) * Matrix + j]
-                        + array_new[i * Matrix + j - 1] + array_new[i * Matrix + j + 1];
-                    
-                    // Compute new element value
-                    double new_elem = 0.25 * sum;
-                    
-                    // Update element value
-                    array_new[i * Matrix + j] = new_elem;
+
+                    arr_new[i * Matrix + j] = (arr_new[(i - 1) * Matrix + j] + arr_new[(i + 1) * Matrix + j]
+                        + arr_new[i * Matrix + j - 1] + arr_new[i * Matrix + j + 1])/4;
                 }
             }
             
             // Swap arrays
-            temp = arr_d;
-            arr_d = array_new;
-            array_new = temp;
+            temp = arr;
+            arr = arr_new;
+            arr_new = temp;
 
-            //use the pointer on the video card
-            #pragma acc host_data use_device(array_new, arr_d, arr_err)
+            //use value on gpu
+            #pragma acc host_data use_device(arr_new, arr, arr_err)
             {
                 // Perform linear combination using cuBLAS
-                cublasStatus_t status = cublasDgeam(handle, CUBLAS_OP_T, CUBLAS_OP_T, Matrix, Matrix, &alpha, arr_d, Matrix, &beta, array_new, Matrix, arr_err, Matrix);
+                cublasStatus_t status = cublasDgeam(handle, CUBLAS_OP_T, CUBLAS_OP_T, Matrix, Matrix, &alpha, arr, Matrix, &beta, arr_new, Matrix, arr_err, Matrix);
                 if (status != CUBLAS_STATUS_SUCCESS) {
                     printf("Failed to perform linear combination using cublas\n");
                     return 1;
                 }
 
                 // Get index of element with maximum value
-                cublasStatus_t status2 = cublasIdamax(handle, Matrix * Matrix, arr_err, 1, &diff);
+                cublasStatus_t status2 = cublasIdamax(handle, Matrix * Matrix, arr_err, 1, &ind);
                 if (status2 != CUBLAS_STATUS_SUCCESS) {
                     printf("Failed to get index of element with maximum value\n");
                     return 1;
                 }
 
                 //get the value on the CPU of the cell with the maximum value of the array 
-                cublasGetVector(1, sizeof(double), arr_err + diff - 1, 1, &diff, 1);
+                cublasGetVector(1, sizeof(double), arr_err + ind - 1, 1, &diff, 1);
             }
             count++;
         }
@@ -141,11 +133,11 @@ int main(int argc, char* argv[]) {
 
     // Free allocated memory on host and device
     free(arr);
-    free(array_new);
+    free(arr_new);
     free(arr_err);
 
-    cublasFree(arr_d);
     cublasDestroy(handle);
 
     return 0;
 }
+
