@@ -76,20 +76,20 @@ int main(int argc, char* argv[]) {
     double alpha = 1.0;
     double beta = -1.0;
 
-    #pragma acc data copyin(arr_new[:Matrix * Matrix],arr[:Matrix * Matrix]) create(sum,arr_err[:Matrix * Matrix])
+    #pragma acc data copyin(arr_new[:Matrix * Matrix],arr[:Matrix * Matrix], arr_err[:Matrix * Matrix])
     {
         // Perform Jacobi iteration
         while (diff > accuracy && count < iterations) 
         {
-            #pragma acc data present(arr,arr_new)
+            #pragma acc data present(arr_new,arr)
             // Perform Jacobi update
             #pragma acc loop independent
             for (int i = 1; i < Matrix - 1; i++) {
                 #pragma acc loop independent
                 for (int j = 1; j < Matrix - 1; j++) {
 
-                    arr_new[i * Matrix + j] = (arr_new[(i - 1) * Matrix + j] + arr_new[(i + 1) * Matrix + j]
-                        + arr_new[i * Matrix + j - 1] + arr_new[i * Matrix + j + 1])/4;
+                    arr_new[i * Matrix + j] = (arr[(i - 1) * Matrix + j] + arr[(i + 1) * Matrix + j]
+                        + arr[i * Matrix + j - 1] + arr[i * Matrix + j + 1])*0.25;
                 }
             }
             
@@ -140,4 +140,3 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
-
