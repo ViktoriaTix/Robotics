@@ -34,12 +34,14 @@ int main(int argc, char* argv[]) {
     arr[(Matrix - 1) * Matrix + 0] = 30;
     arr[(Matrix - 1) * Matrix + Matrix - 1] = 20;
     
-    for (int j = 1; j < Matrix; j++) {
-            arr[0 * Matrix + j] = (arr[0 * Matrix + Matrix - 1] - arr[0 * Matrix + 0]) / (Matrix - 1) + arr[0 * Matrix + j - 1];   //top
-            arr[(Matrix - 1) * Matrix + j] = (arr[(Matrix - 1) * Matrix + Matrix - 1] - arr[(Matrix - 1) * Matrix + 0]) / (Matrix - 1) + arr[(Matrix - 1) * Matrix + j - 1]; //bottom
-            arr[j * Matrix + 0] = (arr[(Matrix - 1) * Matrix + 0] - arr[0 * Matrix + 0]) / (Matrix - 1) + arr[(j - 1) * Matrix + 0]; //left
-            arr[j * Matrix + Matrix - 1] = (arr[(Matrix - 1) * Matrix + Matrix - 1] - arr[0 * Matrix + Matrix - 1]) / (Matrix - 1) + arr[(j - 1) * Matrix + Matrix - 1]; //right
-        }
+    for(int i = 1; i < Matrix - 1; i++)
+    {
+        arr[i*Matrix] = arr[(i-1)*Matrix]+ (10 / (Matrix - 1));
+        arr[i] = arr[i-1] + (10 / (Matrix - 1));
+        arr[(Matrix-1)*Matrix + i] = arr[(Matrix-1)*Matrix + i-1] + (10 / (Matrix - 1));
+        arr[i*Matrix + (Matrix-1)] = arr[(i-1)*Matrix + (Matrix-1)] + (10 / (Matrix - 1));
+
+    }
     // Main loop
     double err = accuracy + 1;
     int iter = 0;
