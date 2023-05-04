@@ -20,13 +20,11 @@ int main(int argc, char* argv[]) {
     // Allocate 1D arrays on host memory
     double* arr = (double*)malloc(Matrix * Matrix * sizeof(double));
     double* arr_new = (double*)malloc(Matrix * Matrix * sizeof(double));
-    double* arr_err = (double*)malloc(Matrix * Matrix * sizeof(double));
-    
+
     // Initialize arrays to zero
     for (int i = 0; i < Matrix * Matrix; i++) {
         arr[i] = 0;
         arr_new[i] = 0;
-        arr_err[i] = 0;
     }
     
     // Set boundary conditions
@@ -53,42 +51,74 @@ int main(int argc, char* argv[]) {
         arr_new[i*Matrix + (Matrix-1)] = arr_new[(i-1)*Matrix + (Matrix-1)] + (10 / (Matrix - 1));
     }
 
+
+    // выделяем память на gpu через cuda для 3 сеток
+    double *CudaArr, *CudaNewArr, *CudaDifArr;
+    cudaMalloc((void **)&CudaArr, sizeof(double) * Matrix * Matrix);
+    cudaMalloc((void **)&CudaNewArr, sizeof(double) * Matrix * Matrix);
+    cudaMalloc((void **)&CudaDifArr, sizeof(double) * Matrix * Matrix);
+
+    // копирование информации с CPU на GPU
+    cudaMemcpy(CudaArr, arr, sizeof(double) * Matrix * Matrix, cudaMemcpyHostToDevice);
+    cudaMemcpy(CudaNewArr, arr_new, sizeof(double) * Matrix * Matrix, cudaMemcpyHostToDevice);
+
+    // выделяем память на gpu. Хранение ошибки на device
+    double *max_err = 0;
+    cudaMalloc((void **)&max_err, sizeof(double));
+
+    size_t tempStorageBytes = 0;
+    double *tempStorage = NULL;
+
+    // получаем размер временного буфера для редукции
+    cub::DeviceReduce::Max(tempStorage, tempStorageBytes, CudaDifArr, max_err, Matrix * Matrix);
+
+    // выделяем память для буфера
+    cudaMalloc((void **)&tempStorage, tempStorageBytes);
+
     // Main loop
     double err = accuracy + 1;
     int iter = 0;
 
-    #pragma acc data copy(arr[0:Matrix*Matrix], array_new[0:Matrix*Matrix])
-    {
-        while (err > accuracy && iter < iterations) {
-            // Compute new values
-            err = 0;
-
-            #pragma acc parallel loop reduction(max:err)
-            for (int j = 1; j < Matrix - 1; j++) {
-                for (int i = 1; i < Matrix - 1; i++) {
-                    int index = j * Matrix + i;
-                    array_new[index] = 0.25 * (arr[index + Matrix] + arr[index - Matrix] + arr[index - 1] + arr[index + 1]);
-                    err = fmax(err, fabs(array_new[index] - arr[index]));
-                }
+    while (err > accuracy && iter < iterations) {
+        
+        err = 0;
+        // Compute new values
+        for (int j = 1; j < Matrix - 1; j++) {
+            for (int i = 1; i < Matrix - 1; i++) {
+                int index = j * Matrix + i;
+                CudaNewArr[index] = 0.25 * (CudaArr[index + Matrix] + CudaArr[index - Matrix] +
+                    CudaArr[index - 1] + CudaArr[index + 1]);
+                CudaDifArr[index] = fabs(CudaNewArr[index] - CudaArr[index]);
             }
-            
-            cub::DeviceReduce::Max(NULL, err, arr, array_new, Matrix*Matrix);
-
-            // Update values
-            #pragma acc parallel loop
-            for (int j = 1; j < Matrix - 1; j++) {
-                for (int i = 1; i < Matrix - 1; i++) {
-                    int index = j * Matrix + i;
-                    arr[index] = array_new[index];
-                }
-            }
-            iter++;
         }
+        
+        // Compute maximum error using CUB
+        cub::DeviceReduce::Max(tempStorage, tempStorageBytes, CudaDifArr, max_err, Matrix * Matrix);
+        
+        // запись ошибки в переменную
+        cudaMemcpy(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost);
+        error = std::abs(error);
+
+        // Update values
+        for (int j = 1; j < Matrix - 1; j++) {
+            for (int i = 1; i < Matrix - 1; i++) {
+                int index = j * Matrix + i;
+                arr[index] = arr_new[index];
+            }
+        }
+        
+        iter++;
     }
+
     printf("Final result: %d, %0.6lf\n", iter, err);
+    
     // Free memory
     free(arr);
     free(array_new);
+
+    cudaFree(CudaArr);
+    cudaFree(CudaNewArr);
+    cudaFree(CudaDifArr);
 
     clock_t end = clock();
     time_spent += (double)(end - begin) / CLOCKS_PER_SEC;
