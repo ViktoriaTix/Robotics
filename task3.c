@@ -81,7 +81,9 @@ int main(int argc, char* argv[]) {
         // Perform Jacobi iteration
         while (diff > accuracy && count < iterations) 
         {
-            #pragma acc data present(arr_new,arr)
+            count++;
+
+            #pragma acc data present(arr_new[:Matrix * Matrix],arr[:Matrix * Matrix])
             // Perform Jacobi update
             #pragma acc loop independent
             for (int i = 1; i < Matrix - 1; i++) {
@@ -93,32 +95,35 @@ int main(int argc, char* argv[]) {
                 }
             }
             
+
+            if (count % 100 == 0){
+                //use value on gpu
+                #pragma acc host_data use_device(arr_new, arr, arr_err)
+                {
+                    // Perform linear combination using cuBLAS
+                    cublasStatus_t status = cublasDgeam(handle, CUBLAS_OP_T, CUBLAS_OP_T, Matrix, Matrix, &alpha, arr, Matrix, &beta, arr_new, Matrix, arr_err, Matrix);
+                    if (status != CUBLAS_STATUS_SUCCESS) {
+                        printf("Failed to perform linear combination using cublas\n");
+                        return 1;
+                    }
+
+                    // Get index of element with maximum value
+                    cublasStatus_t status2 = cublasIdamax(handle, Matrix * Matrix, arr_err, 1, &ind);
+                    if (status2 != CUBLAS_STATUS_SUCCESS) {
+                        printf("Failed to get index of element with maximum value\n");
+                        return 1;
+                    }
+
+                    //get the value on the CPU of the cell with the maximum value of the array 
+                    cublasGetVector(1, sizeof(double), arr_err + ind - 1, 1, &diff, 1);
+                }
+            }
+
             // Swap arrays
             temp = arr;
             arr = arr_new;
             arr_new = temp;
 
-            //use value on gpu
-            #pragma acc host_data use_device(arr_new, arr, arr_err)
-            {
-                // Perform linear combination using cuBLAS
-                cublasStatus_t status = cublasDgeam(handle, CUBLAS_OP_T, CUBLAS_OP_T, Matrix, Matrix, &alpha, arr, Matrix, &beta, arr_new, Matrix, arr_err, Matrix);
-                if (status != CUBLAS_STATUS_SUCCESS) {
-                    printf("Failed to perform linear combination using cublas\n");
-                    return 1;
-                }
-
-                // Get index of element with maximum value
-                cublasStatus_t status2 = cublasIdamax(handle, Matrix * Matrix, arr_err, 1, &ind);
-                if (status2 != CUBLAS_STATUS_SUCCESS) {
-                    printf("Failed to get index of element with maximum value\n");
-                    return 1;
-                }
-
-                //get the value on the CPU of the cell with the maximum value of the array 
-                cublasGetVector(1, sizeof(double), arr_err + ind - 1, 1, &diff, 1);
-            }
-            count++;
         }
     }
 
