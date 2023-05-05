@@ -101,21 +101,43 @@ int main(int argc, char* argv[]) {
                 #pragma acc host_data use_device(arr_new, arr, arr_err)
                 {
                     // Perform linear combination using cuBLAS
-                    cublasStatus_t status = cublasDgeam(handle, CUBLAS_OP_T, CUBLAS_OP_T, Matrix, Matrix, &alpha, arr, Matrix, &beta, arr_new, Matrix, arr_err, Matrix);
+                    status = cublasDgeam(handle, CUBLAS_OP_T, CUBLAS_OP_T, Matrix, Matrix, &alpha, arr, Matrix, &beta, arr_new, Matrix, arr_err, Matrix);
                     if (status != CUBLAS_STATUS_SUCCESS) {
                         printf("Failed to perform linear combination using cublas\n");
+                        if (&arr != NULL)
+                            free(arr);
+                        if (&arr_new != NULL)
+                            free(arr_new);
+                        if (&arr_err != NULL)
+                            free(arr_err);
                         return 1;
                     }
 
                     // Get index of element with maximum value
-                    cublasStatus_t status2 = cublasIdamax(handle, Matrix * Matrix, arr_err, 1, &ind);
-                    if (status2 != CUBLAS_STATUS_SUCCESS) {
+                    status = cublasIdamax(handle, Matrix * Matrix, arr_err, 1, &ind);
+                    if (status != CUBLAS_STATUS_SUCCESS) {
                         printf("Failed to get index of element with maximum value\n");
+                        if (&arr != NULL)
+                            free(arr);
+                        if (&arr_new != NULL)
+                            free(arr_new);
+                        if (&arr_err != NULL)
+                            free(arr_err);
                         return 1;
                     }
 
                     //get the value on the CPU of the cell with the maximum value of the array 
-                    cublasGetVector(1, sizeof(double), arr_err + ind - 1, 1, &diff, 1);
+                    status = cublasGetVector(1, sizeof(double), arr_err + ind - 1, 1, &diff, 1);
+                    if (status != CUBLAS_STATUS_SUCCESS) {
+                        printf("Failed to perform linear combination using cublas\n");
+                        if (&arr != NULL)
+                            free(arr);
+                        if (&arr_new != NULL)
+                            free(arr_new);
+                        if (&arr_err != NULL)
+                            free(arr_err);
+                        return 1;
+                    }
                 }
             }
 
