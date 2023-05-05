@@ -8,9 +8,9 @@
 
 int main(int argc, char* argv[]) {
     
-    double time_spent1 = 0.0;
+    double time_spent = 0.0;
 
-    clock_t begin1 = clock(); 
+    clock_t begin = clock(); 
 
     // Convert command line arguments to integers
     int Matrix = atoi(argv[1]);
@@ -97,7 +97,7 @@ int main(int argc, char* argv[]) {
         
         // запись ошибки в переменную
         cudaMemcpy(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost);
-        error = std::abs(error);
+        err = std::abs(err);
 
         // Update values
         for (int j = 1; j < Matrix - 1; j++) {
@@ -114,7 +114,7 @@ int main(int argc, char* argv[]) {
     
     // Free memory
     free(arr);
-    free(array_new);
+    free(arr_new);
 
     cudaFree(CudaArr);
     cudaFree(CudaNewArr);
