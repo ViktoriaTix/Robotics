@@ -51,6 +51,14 @@ int main(int argc, char* argv[]) {
         arr_new[i*Matrix + (Matrix-1)] = arr_new[(i-1)*Matrix + (Matrix-1)] + (10 / (Matrix - 1));
     }
 
+    
+    // создание потока
+    cudaStream_t stream;
+    cudaStreamCreate(&stream);
+
+    // создание графа
+    cudaGraph_t graph;
+    cudaGraphExec_t graph_exec;
 
     // выделяем память на gpu через cuda для 3 сеток
     double *CudaArr, *CudaNewArr, *CudaDifArr;
@@ -70,10 +78,29 @@ int main(int argc, char* argv[]) {
     double *tempStorage = NULL;
 
     // получаем размер временного буфера для редукции
-    cub::DeviceReduce::Max(tempStorage, tempStorageBytes, CudaDifArr, max_err, Matrix * Matrix);
+    cub::DeviceReduce::Max(tempStorage, tempStorageBytes, CudaDifArr, max_err, Matrix * Matrix, stream);
 
     // выделяем память для буфера
     cudaMalloc((void **)&tempStorage, tempStorageBytes);
+
+    cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal);
+
+    // Compute new values
+    for (int j = 1; j < Matrix - 1; j++) {
+        for (int i = 1; i < Matrix - 1; i++) {
+            int index = j * Matrix + i;
+            CudaNewArr[index] = 0.25 * (CudaArr[index + Matrix] + CudaArr[index - Matrix] +
+                CudaArr[index - 1] + CudaArr[index + 1]);
+            CudaDifArr[index] = fabs(CudaNewArr[index] - CudaArr[index]);
+        }
+    }
+    
+    // Compute maximum error using CUB
+    cub::DeviceReduce::Max(tempStorage, tempStorageBytes, CudaDifArr, max_err, Matrix * Matrix, stream);
+    
+
+    cudaStreamEndCapture(stream, &graph);
+    cudaGraphInstantiate(&graph_exec, graph, NULL, NULL, 0);
 
     // Main loop
     double err = accuracy + 1;
@@ -82,19 +109,7 @@ int main(int argc, char* argv[]) {
     while (err > accuracy && iter < iterations) {
         
         err = 0;
-        // Compute new values
-        for (int j = 1; j < Matrix - 1; j++) {
-            for (int i = 1; i < Matrix - 1; i++) {
-                int index = j * Matrix + i;
-                CudaNewArr[index] = 0.25 * (CudaArr[index + Matrix] + CudaArr[index - Matrix] +
-                    CudaArr[index - 1] + CudaArr[index + 1]);
-                CudaDifArr[index] = fabs(CudaNewArr[index] - CudaArr[index]);
-            }
-        }
-        
-        // Compute maximum error using CUB
-        cub::DeviceReduce::Max(tempStorage, tempStorageBytes, CudaDifArr, max_err, Matrix * Matrix);
-        
+        cudaGraphLaunch(graph_exec, stream);
         // запись ошибки в переменную
         cudaMemcpy(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost);
         err = std::abs(err);
@@ -112,6 +127,10 @@ int main(int argc, char* argv[]) {
 
     printf("Final result: %d, %0.6lf\n", iter, err);
     
+    // удаление потока и графа
+    cudaStreamDestroy(stream);
+    cudaGraphDestroy(graph);
+
     // Free memory
     free(arr);
     free(arr_new);
