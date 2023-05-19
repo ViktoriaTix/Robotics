@@ -9,8 +9,8 @@
 // функция изменения матрицы уравнения теплопроводности
 __global__ void calculate(double *CudaArr, double *CudaNewArr, size_t Matrix)
 {
-    size_t i = blockIdx.x + 1;
-    size_t j = threadIdx.x + 1;
+    size_t i = blockIdx.x;
+    size_t j = threadIdx.x;
     int index = i * Matrix + j;
     CudaNewArr[index] = 0.25 * (CudaArr[(i - 1) * Matrix + j] + CudaArr[(i + 1) * Matrix + j] + CudaArr[index - 1] + CudaArr[index + 1]);
 }
@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
     cudaGraph_t graph;
     cudaGraphExec_t graph_exec;
 
-    // выделяем память на gpu через cuda для 3 сеток
+    // выделяем память на gpu через cuda для 2 сеток
     double *CudaArr, *CudaNewArr;
     cudaMalloc((void **)&CudaArr, sizeof(double) * Matrix * Matrix);
     cudaMalloc((void **)&CudaNewArr, sizeof(double) * Matrix * Matrix);
@@ -81,12 +81,14 @@ int main(int argc, char* argv[]) {
 
     // Compute new values
     for (size_t i = 0; i < 100; i += 2) {
+	    //разобрать аргументы
         calculate<<<Matrix - 2, Matrix-2, 0, stream>>>(CudaArr, CudaNewArr, Matrix);
         calculate<<<Matrix-2, Matrix-2, 0, stream>>>(CudaNewArr, CudaArr, Matrix);
     }
     subtraction<<<Matrix, Matrix, 0, stream>>>(CudaArr, CudaNewArr);
 
     // Compute maximum error using CUB
+	//разобраться как работает 
     cub::DeviceReduce::Max(tempStorage, tempStorageBytes, CudaNewArr, max_err, Matrix * Matrix, stream);
     restore<<<1, Matrix, 0, stream>>>(CudaNewArr, Matrix);
 
@@ -103,6 +105,7 @@ int main(int argc, char* argv[]) {
 
         cudaGraphLaunch(graph_exec, stream);
         // запись ошибки в переменную
+	    //разобраться как работает 
         cudaMemcpyAsync(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost, stream);
         iter+=100;  
     }
@@ -128,6 +131,8 @@ int main(int argc, char* argv[]) {
     cudaFree(CudaArr);
     cudaFree(CudaNewArr);
 
+	Free(arr);
+	
     clock_t end = clock();
     time_spent += (double)(end - begin) / CLOCKS_PER_SEC;
     printf("Time elapsed: %f\n", time_spent);
