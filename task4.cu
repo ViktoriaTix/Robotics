@@ -23,13 +23,13 @@ __global__ void subtraction(double* CudaArr, double* CudaNewArr)
 	CudaNewArr[idx] = CudaArr[idx] - CudaNewArr[idx];
 }
 
-// Функция востановления границ матрицы
-__global__ void restore(double* A, int size){
+// функция востановления границ матрицы
+__global__ void restore(double* arr, int size){
 	size_t i = threadIdx.x;
-	A[i] = 10.0 + i * 10.0 / (size - 1);
-	A[i * size] = 10.0 + i * 10.0 / (size - 1);
-	A[size - 1 + i * size] = 20.0 + i * 10.0 / (size - 1);
-	A[size * (size - 1) + i] = 20.0 + i * 10.0 / (size - 1);
+	arr[i] = 10.0 + i * 10.0 / (size - 1);
+	arr[i * size] = 10.0 + i * 10.0 / (size - 1);
+	arr[size - 1 + i * size] = 20.0 + i * 10.0 / (size - 1);
+	arr[size * (size - 1) + i] = 20.0 + i * 10.0 / (size - 1);
 }
 
 int main(int argc, char* argv[]) {
@@ -43,13 +43,14 @@ int main(int argc, char* argv[]) {
     double accuracy = atof(argv[2]);
     int iterations = atoi(argv[3]);
 
+    double* arr = (double*)malloc(Matrix * Matrix * sizeof(double));
+
     cudaSetDevice(1);
     
     // создание потока
     cudaStream_t stream;
     cudaStreamCreate(&stream);
 
-	bool graphCreated = false;
     // создание графа
     cudaGraph_t graph;
     cudaGraphExec_t graph_exec;
@@ -75,47 +76,51 @@ int main(int argc, char* argv[]) {
     // выделяем память для буфера
     cudaMalloc(&tempStorage, tempStorageBytes);
 
+    ///////////////////////////////////////////////////////////////создаем граф
+    cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal);
+
+    // Compute new values
+    for (size_t i = 0; i < 100; i += 2) {
+        calculate<<<Matrix - 2, Matrix-2, 0, stream>>>(CudaArr, CudaNewArr, Matrix);
+        calculate<<<Matrix-2, Matrix-2, 0, stream>>>(CudaNewArr, CudaArr, Matrix);
+    }
+    subtraction<<<Matrix, Matrix, 0, stream>>>(CudaArr, CudaNewArr);
+
+    // Compute maximum error using CUB
+    cub::DeviceReduce::Max(tempStorage, tempStorageBytes, CudaNewArr, max_err, Matrix * Matrix, stream);
+    restore<<<1, Matrix, 0, stream>>>(CudaNewArr, Matrix);
+
+    cudaStreamEndCapture(stream, &graph);
+    cudaGraphInstantiate(&graph_exec, graph, NULL, NULL, 0);
+
+    /////////////////////////////////////////////////////////////////
+
     // Main loop
     double err = 1;
     int iter = 0;
 
     while (err > accuracy && iter < iterations) {
 
-        if(!graphCreated){
-
-            //создаем граф
-            cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal);
-
-            // Compute new values
-            for (size_t i = 0; i < 100; i += 2) {
-                calculate<<<Matrix - 2, Matrix-2, 0, stream>>>(CudaArr, CudaNewArr, Matrix);
-                calculate<<<Matrix-2, Matrix-2, 0, stream>>>(CudaNewArr, CudaArr, Matrix);
-            }
-            subtraction<<<Matrix, Matrix, 0, stream>>>(CudaArr, CudaNewArr);
-
-            // Compute maximum error using CUB
-            cub::DeviceReduce::Max(tempStorage, tempStorageBytes, CudaNewArr, max_err, Matrix * Matrix, stream);
-            restore<<<1, Matrix, 0, stream>>>(CudaNewArr, Matrix);
-            //printf("hi");
-
-            cudaStreamEndCapture(stream, &graph);
-            cudaGraphInstantiate(&graph_exec, graph, NULL, NULL, 0);
-            graphCreated=true;
-
-        }
-        else{
-            cudaGraphLaunch(graph_exec, stream);
-            // запись ошибки в переменную
-            cudaMemcpyAsync(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost, stream);
-			cudaStreamSynchronize(stream);
-            iter+=100;
-            graphCreated=false;
-        }
-        
+        cudaGraphLaunch(graph_exec, stream);
+        // запись ошибки в переменную
+        cudaMemcpyAsync(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost, stream);
+        iter+=100;  
     }
 
-    printf("Final result: %d, %0.6lf\n", iter, err);
+    // копирование информации
+    cudaMemcpy(arr, CudaArr, sizeof(double) * Matrix * Matrix, cudaMemcpyDeviceToHost);    
     
+    /*
+    for(int i = 0; i < Matrix; i++){
+        for(int j = 0; j < Matrix; j++){
+            printf("%8.3lf", arr[i*Matrix + j]);
+        }
+        printf("\n");
+    }
+    */
+    printf("\n");
+    printf("Final result: %d, %0.6lf\n", iter, err);
+
     // удаление потока и графа
     cudaStreamDestroy(stream);
     cudaGraphDestroy(graph);
