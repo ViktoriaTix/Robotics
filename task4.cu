@@ -9,18 +9,22 @@
 // функция изменения матрицы уравнения теплопроводности
 __global__ void calculate(double *CudaArr, double *CudaNewArr, size_t Matrix)
 {
-    size_t i = blockIdx.x;
-    size_t j = threadIdx.x;
+    size_t i = blockDim.x * blockIdx.x + threadIdx.x; //вычисления линейного индекса элемента внутри сетки 
+    size_t j =  blockDim.y * blockIdx.y + threadIdx.y; 
     int index = i * Matrix + j;
-    CudaNewArr[index] = 0.25 * (CudaArr[(i - 1) * Matrix + j] + CudaArr[(i + 1) * Matrix + j] + CudaArr[index - 1] + CudaArr[index + 1]);
+    if (!(i == 0 || j == 0))
+        CudaNewArr[index] = 0.25 * (CudaArr[(i - 1) * Matrix + j] + CudaArr[(i + 1) * Matrix + j] + CudaArr[index - 1] + CudaArr[index + 1]);
 }
 
 
 // функция разницы матриц
-__global__ void subtraction(double* CudaArr, double* CudaNewArr)
+__global__ void subtraction(double* CudaArr, double* CudaNewArr, size_t Matrix)
 {
-	size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-	CudaNewArr[idx] = CudaArr[idx] - CudaNewArr[idx];
+    size_t i = blockIdx.x * blockDim.x + threadIdx.x;  
+    size_t j =  blockDim.y * blockIdx.y + threadIdx.y;
+    int idx = i * Matrix + j; 
+    if ((i < Matrix && j < Matrix))
+	    CudaNewArr[idx] = CudaArr[idx] - CudaNewArr[idx];
 }
 
 // функция востановления границ матрицы
@@ -30,6 +34,14 @@ __global__ void restore(double* arr, int size){
 	arr[i * size] = 10.0 + i * 10.0 / (size - 1);
 	arr[size - 1 + i * size] = 20.0 + i * 10.0 / (size - 1);
 	arr[size * (size - 1) + i] = 20.0 + i * 10.0 / (size - 1);
+}
+
+int find_threads(int size){
+	if (size%32==0)
+		return size/1024;
+
+	return int(size/1024)+1;
+
 }
 
 int main(int argc, char* argv[]) {
@@ -42,8 +54,6 @@ int main(int argc, char* argv[]) {
     int Matrix = atoi(argv[1]);
     double accuracy = atof(argv[2]);
     int iterations = atoi(argv[3]);
-
-    double* arr = (double*)malloc(Matrix * Matrix * sizeof(double));
 
     cudaSetDevice(1);
     
@@ -76,19 +86,21 @@ int main(int argc, char* argv[]) {
     // выделяем память для буфера
     cudaMalloc(&tempStorage, tempStorageBytes);
 
+    int t = 1024;
+    int b = find_threads(Matrix);
+
     ///////////////////////////////////////////////////////////////создаем граф
     cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal);
 
     // Compute new values
     for (size_t i = 0; i < 100; i += 2) {
-	    //разобрать аргументы
-        calculate<<<Matrix - 2, Matrix-2, 0, stream>>>(CudaArr, CudaNewArr, Matrix);
-        calculate<<<Matrix-2, Matrix-2, 0, stream>>>(CudaNewArr, CudaArr, Matrix);
+        //количество блоков, потоков, разделяемая память, поток
+        calculate<<<b, t, 0, stream>>>(CudaArr, CudaNewArr, Matrix);
+        calculate<<<b, t, 0, stream>>>(CudaNewArr, CudaArr, Matrix);
     }
-    subtraction<<<Matrix, Matrix, 0, stream>>>(CudaArr, CudaNewArr);
+    subtraction<<<b, t, 0, stream>>>(CudaArr, CudaNewArr, Matrix);
 
     // Compute maximum error using CUB
-	//разобраться как работает 
     cub::DeviceReduce::Max(tempStorage, tempStorageBytes, CudaNewArr, max_err, Matrix * Matrix, stream);
     restore<<<1, Matrix, 0, stream>>>(CudaNewArr, Matrix);
 
@@ -105,23 +117,10 @@ int main(int argc, char* argv[]) {
 
         cudaGraphLaunch(graph_exec, stream);
         // запись ошибки в переменную
-	    //разобраться как работает 
-        cudaMemcpyAsync(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost, stream);
+        cudaMemcpy(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost, stream);
         iter+=100;  
     }
 
-    // копирование информации
-    cudaMemcpy(arr, CudaArr, sizeof(double) * Matrix * Matrix, cudaMemcpyDeviceToHost);    
-    
-    /*
-    for(int i = 0; i < Matrix; i++){
-        for(int j = 0; j < Matrix; j++){
-            printf("%8.3lf", arr[i*Matrix + j]);
-        }
-        printf("\n");
-    }
-    */
-    printf("\n");
     printf("Final result: %d, %0.6lf\n", iter, err);
 
     // удаление потока и графа
@@ -131,8 +130,6 @@ int main(int argc, char* argv[]) {
     cudaFree(CudaArr);
     cudaFree(CudaNewArr);
 
-	Free(arr);
-	
     clock_t end = clock();
     time_spent += (double)(end - begin) / CLOCKS_PER_SEC;
     printf("Time elapsed: %f\n", time_spent);
