@@ -12,7 +12,7 @@ __global__ void calculate(double *CudaArr, double *CudaNewArr, size_t Matrix)
     size_t i = blockDim.x * blockIdx.x + threadIdx.x; //вычисления линейного индекса элемента внутри сетки 
     size_t j =  blockDim.y * blockIdx.y + threadIdx.y; 
     int index = i * Matrix + j;
-    if (!(i == 0 || j == 0 || i == Matrix - 1 || j == Matrix - 1)) // проверка граничных значений
+    if ((i < Matrix && j < Matrix && i > 0 && j > 0)) // проверка граничных значений
         CudaNewArr[index] = 0.25 * (CudaArr[(i - 1) * Matrix + j] + CudaArr[(i + 1) * Matrix + j] + CudaArr[index - 1] + CudaArr[index + 1]);
 }
 
@@ -29,7 +29,11 @@ __global__ void subtraction(double* CudaArr, double* CudaNewArr, size_t Matrix)
 
 // функция востановления границ матрицы
 __global__ void restore(double* arr, int size){
-	size_t i = threadIdx.x;
+	size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+	
+	if(i >= size-1)
+        	return;
+	
 	arr[i] = 10.0 + i * 10.0 / (size - 1);
 	arr[i * size] = 10.0 + i * 10.0 / (size - 1);
 	arr[size - 1 + i * size] = 20.0 + i * 10.0 / (size - 1);
@@ -65,12 +69,15 @@ int main(int argc, char* argv[]) {
     cudaGraph_t graph;
     cudaGraphExec_t graph_exec;
 
+    dim3 t(32,32); //определяю количество нитей в каждом блоке
+    dim3 b(find_threads(Matrix), find_threads(Matrix)); // количество блоков
+	
     // выделяем память на gpu через cuda для 2 сеток
     double *CudaArr, *CudaNewArr;
     cudaMalloc((void **)&CudaArr, sizeof(double) * Matrix * Matrix);
     cudaMalloc((void **)&CudaNewArr, sizeof(double) * Matrix * Matrix);
 
-    restore<<<1, Matrix>>>(CudaArr, Matrix);
+    restore<<<b, t>>>(CudaArr, Matrix);
     cudaMemcpy(CudaNewArr, CudaArr, sizeof(double) * Matrix * Matrix, cudaMemcpyHostToDevice);
 
     // выделяем память на gpu. Хранение ошибки на device
@@ -85,9 +92,6 @@ int main(int argc, char* argv[]) {
 
     // выделяем память для буфера
     cudaMalloc(&tempStorage, tempStorageBytes);
-
-    dim3 t(32,32); //определяю количество нитей в каждом блоке
-    dim3 b(find_threads(Matrix), find_threads(Matrix)); // количество блоков
 
     ///////////////////////////////////////////////////////////////создаем граф
     cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal);
