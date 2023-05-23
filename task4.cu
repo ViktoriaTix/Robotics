@@ -96,13 +96,13 @@ int main(int argc, char* argv[]) {
     for (size_t i = 0; i < 100; i += 2) {
         //количество блоков, потоков, разделяемая память, поток
         calculate<<<b, t, 0, stream>>>(CudaArr, CudaNewArr, Matrix);
+	// В данном случае значение 0 указывает на то, что ядро не требует выделения дополнительной разделяемой памяти.
         calculate<<<b, t, 0, stream>>>(CudaNewArr, CudaArr, Matrix);
     }
     subtraction<<<b, t, 0, stream>>>(CudaArr, CudaNewArr, Matrix);
 
     // Compute maximum error using CUB
     cub::DeviceReduce::Max(tempStorage, tempStorageBytes, CudaNewArr, max_err, Matrix * Matrix, stream);
-    restore<<<1, Matrix, 0, stream>>>(CudaNewArr, Matrix);
 
     cudaStreamEndCapture(stream, &graph);
     cudaGraphInstantiate(&graph_exec, graph, NULL, NULL, 0);
