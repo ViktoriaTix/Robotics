@@ -12,7 +12,7 @@ __global__ void calculate(double *CudaArr, double *CudaNewArr, size_t Matrix)
     size_t i = blockDim.x * blockIdx.x + threadIdx.x; //вычисления линейного индекса элемента внутри сетки 
     size_t j =  blockDim.y * blockIdx.y + threadIdx.y; 
     int index = i * Matrix + j;
-    if ((i < Matrix && j < Matrix && i > 0 && j > 0)) // проверка граничных значений
+    if ((i < Matrix && j < Matrix && i > 0 && j > 0)) 
         CudaNewArr[index] = 0.25 * (CudaArr[(i - 1) * Matrix + j] + CudaArr[(i + 1) * Matrix + j] + CudaArr[index - 1] + CudaArr[index + 1]);
 }
 
