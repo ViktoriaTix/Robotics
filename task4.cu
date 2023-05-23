@@ -120,8 +120,7 @@ int main(int argc, char* argv[]) {
     while (err > accuracy && iter < iterations) {
 
         cudaGraphLaunch(graph_exec, stream);
-        // запись ошибки в переменную
-        cudaMemcpy(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost);
+        cudaMemcpy(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost, stream);
         iter+=100;  
     }
 
