@@ -86,7 +86,7 @@ int main(int argc, char* argv[]) {
     // выделяем память для буфера
     cudaMalloc(&tempStorage, tempStorageBytes);
 
-    int t = 1024;
+    dim3 t(32,32); //определяю количество нитей в каждом блоке 
     int b = find_threads(Matrix);
 
     ///////////////////////////////////////////////////////////////создаем граф
