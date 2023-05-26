@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
         cudaDeviceEnablePeerAccess(rank + 1, 0);
 	
     size_t size_y = Matrix / size + 1;
-    if (rank != Matrix - 1 && rank != 0) 
+    if (rank != size - 1 && rank != 0) 
 	    size_y += 1;
 	
     dim3 t(32,32); //определяю количество нитей в каждом блоке
@@ -88,7 +88,7 @@ int main(int argc, char* argv[]) {
     cudaMallocHost(&A, sizeof(double) * Matrix * Matrix);
     restore<<<b, t>>>(A, Matrix);
 	
-    size_t offset = (rank != 0) ? size : 0;
+    size_t offset = (rank != 0) ? Matrix : 0;
     cudaMemcpy(CudaArr, A + (Matrix * Matrix * rank / size) - offset, sizeof(double) * Matrix * size_y, cudaMemcpyHostToDevice);
     cudaMemcpy(CudaNewArr, A + (Matrix * Matrix * rank / size) - offset, sizeof(double) * Matrix * size_y, cudaMemcpyHostToDevice);
 
