@@ -5,6 +5,7 @@
 #include <math.h>
 #include <time.h>
 
+#include "mpi.h"
 
 // функция изменения матрицы уравнения теплопроводности
 __global__ void calculate(double *CudaArr, double *CudaNewArr, size_t MatrixX, size_t MatrixY)
