@@ -7,12 +7,12 @@
 
 
 // функция изменения матрицы уравнения теплопроводности
-__global__ void calculate(double *CudaArr, double *CudaNewArr, size_t Matrix)
+__global__ void calculate(double *CudaArr, double *CudaNewArr, size_t MatrixX, size_t MatrixY)
 {
     size_t i = blockDim.x * blockIdx.x + threadIdx.x; //вычисления линейного индекса элемента внутри сетки 
     size_t j =  blockDim.y * blockIdx.y + threadIdx.y; 
-    int index = i * Matrix + j;
-    if ((i < Matrix && j < Matrix && i > 0 && j > 0)) 
+    int index = i * MatrixX + j;
+    if ((i < MatrixX - 1 && j < MatrixY - 1 && i > 0 && j > 0)) 
         CudaNewArr[index] = 0.25 * (CudaArr[(i - 1) * Matrix + j] + CudaArr[(i + 1) * Matrix + j] + CudaArr[index - 1] + CudaArr[index + 1]);
 }
 
@@ -51,7 +51,6 @@ int find_threads(int size){
 int main(int argc, char* argv[]) {
     
     double time_spent = 0.0;
-
     clock_t begin = clock(); 
 
     // Convert command line arguments to integers
@@ -68,18 +67,30 @@ int main(int argc, char* argv[]) {
     /* Call MPI routines like MPI_Send, MPI_Recv, ... */
     cudaSetDevice(rank);       
 
+    if (rank != 0)
+        cudaDeviceEnablePeerAccess(rank - 1, 0);
+    if (rank != (size-1))
+        cudaDeviceEnablePeerAccess(rank + 1, 0);
+	
+    size_t size_y = Matrix / size + 1;
+    if (rank != Matrix - 1 && rank != 0) 
+	    size_y += 1;
+	
     dim3 t(32,32); //определяю количество нитей в каждом блоке
     dim3 b(find_threads(Matrix), find_threads(Matrix)); // количество блоков
 	
     // выделяем память на gpu через cuda для 3 сеток
-    double *CudaArr, *CudaNewArr, *CudaArrErr;
-    cudaMalloc((void **)&CudaArr, sizeof(double) * Matrix * Matrix);
-    cudaMalloc((void **)&CudaNewArr, sizeof(double) * Matrix * Matrix);
-    cudaMalloc((void **)&CudaArrErr, sizeof(double) * Matrix * Matrix);
+    double *A, *CudaArr, *CudaNewArr, *CudaArrErr;
+    cudaMalloc((void **)&CudaArr, sizeof(double) * Matrix * size_y);
+    cudaMalloc((void **)&CudaNewArr, sizeof(double) * Matrix * size_y);
+    cudaMalloc((void **)&CudaArrErr, sizeof(double) * Matrix * size_y);
 
-
-    restore<<<b, t>>>(CudaArr, Matrix);
-    cudaMemcpy(CudaNewArr, CudaArr, sizeof(double) * Matrix * Matrix, cudaMemcpyHostToDevice);
+    cudaMallocHost(&A, sizeof(double) * Matrix * Matrix);
+    restore<<<b, t>>>(A, Matrix);
+	
+    size_t offset = (rank != 0) ? size : 0;
+    cudaMemcpy(CudaArr, A + (Matrix * Matrix * rank / size) - offset, sizeof(double) * Matrix * size_y, cudaMemcpyHostToDevice);
+    cudaMemcpy(CudaNewArr, A + (Matrix * Matrix * rank / size) - offset, sizeof(double) * Matrix * size_y, cudaMemcpyHostToDevice);
 
     // выделяем память на gpu. Хранение ошибки на device
     double *max_err = 0;
@@ -89,10 +100,13 @@ int main(int argc, char* argv[]) {
     double *tempStorage = NULL;
 
     // получаем размер временного буфера для редукции
-    cub::DeviceReduce::Max(tempStorage, tempStorageBytes, CudaNewArr, max_err, Matrix * Matrix, stream);
+    cub::DeviceReduce::Max(tempStorage, tempStorageBytes, CudaNewArr, max_err, Matrix * size_y);
 
     // выделяем память для буфера
     cudaMalloc(&tempStorage, tempStorageBytes);
+
+    cudaStream_t stream;
+    cudaStreamCreate(&stream);	
 
     // Main loop
     double err = 1;
@@ -100,28 +114,32 @@ int main(int argc, char* argv[]) {
 
     while (err > accuracy && iter < iterations) 
     {
-        
-        calculate<<<b, t>>>(CudaArr, CudaNewArr, Matrix, size_y);
-		iter++;
-		// Расчитываем ошибку каждую сотую итерацию
-		if (iter % 100 == 0) 
-        {
-            subtraction<<<b, t>>>(CudaNewArr, CudaArr, CudaArrErr, Matrix);
-			cub::DeviceReduce::Max(tempStorage, tempStorageSize, CudaArrErr, max_err, Matrix * size_y);
-			cudaMemcpy(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost);
+	iter++;
+	calculate <<<b, t, 0, stream>>> (CudaArr, CudaNewArr, Matrix, size_y);
+	// Расчитываем ошибку каждую сотую итерацию
+	if (iter % 100 == 0) {
+		subtraction<<<b, t, 0, stream>>>(CudaArr, CudaNewArr, CudaArrErr, Matrix);
+		cub::DeviceReduce::Max(tempStorage, tempStorageSize, CudaArrErr, max_err, Matrix * size_y);
+		cudaMemcpy(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost);
 
-			// Находим максимальную ошибку среди всех и передаём её всем процессам
-			MPI_Allreduce((void*)&err,(void*)&err, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-		}
-
-		if (rank != 0) // Обмен верхней границей
-            MPI_Sendrecv(CudaNewArr + Matrix + 1, Matrix - 2, MPI_DOUBLE, rank - 1, 0, CudaNewArr + 1, Matrix - 2, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		MPI_Allreduce((void*)&max_err,(void*)&max_err, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
 		
-        if (rank != size - 1) // Обмен нижней границей
-            MPI_Sendrecv(CudaNewArr + (size_y - 2) * Matrix + 1, Matrix - 2, MPI_DOUBLE, rank + 1, 0, CudaNewArr + (size_y - 1) * Matrix + 1, Matrix - 2, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-		std::swap(CudaArr, CudaNewArr);
+		cudaMemcpyAsync(err, max_err, sizeof(double), cudaMemcpyDeviceToHost, stream); // запись ошибки в переменную на host
+            	// Находим максимальную ошибку среди всех и передаём её всем процессам
 	}
+
+	if (rank != 0){ // Обмен верхней границей
+            	MPI_Sendrecv(CudaNewArr + Matrix + 1, Matrix - 2, MPI_DOUBLE, rank - 1, 0, CudaNewArr + 1, 
+			     Matrix - 2, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	}	
+        if (rank != size - 1) { // Обмен нижней границей
+            	MPI_Sendrecv(CudaNewArr + (size_y - 2) * Matrix + 1, Matrix - 2, MPI_DOUBLE, rank + 1, 0, 
+			     CudaNewArr + (size_y - 1) * Matrix + 1, Matrix - 2, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	}    
+	double* c = CudaNewArr; 
+        CudaNewArr = CudaArr;
+        CudaArr = c;
+    }
 
     printf("Final result: %d, %0.6lf\n", iter, err);
 
@@ -129,7 +147,10 @@ int main(int argc, char* argv[]) {
     cudaFree(CudaArr);
     cudaFree(CudaNewArr);
     cudaFree(CudaArrErr);
+    cudaFree(A);
 
+    MPI_Finalize();
+	
     clock_t end = clock();
     time_spent += (double)(end - begin) / CLOCKS_PER_SEC;
     printf("Time elapsed: %f\n", time_spent);
