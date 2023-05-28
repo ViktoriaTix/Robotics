@@ -14,18 +14,18 @@ __global__ void calculate(double *CudaArr, double *CudaNewArr, size_t MatrixX, s
     size_t j =  blockDim.y * blockIdx.y + threadIdx.y; 
     int index = i * MatrixX + j;
     if ((i < MatrixX - 1 && j < MatrixY - 1 && i > 0 && j > 0)) 
-        CudaNewArr[index] = 0.25 * (CudaArr[(i - 1) * Matrix + j] + CudaArr[(i + 1) * Matrix + j] + CudaArr[index - 1] + CudaArr[index + 1]);
+        CudaNewArr[index] = 0.25 * (CudaArr[(i - 1) * MatrixX + j] + CudaArr[(i + 1) * MatrixX + j] + CudaArr[index - 1] + CudaArr[index + 1]);
 }
 
 
 // функция разницы матриц
-__global__ void subtraction(double* CudaArr, double* CudaNewArr, size_t Matrix)
+__global__ void subtraction(double* CudaArr, double* CudaNewArr, double* CudaArrErr, size_t Matrix)
 {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;  
     size_t j =  blockDim.y * blockIdx.y + threadIdx.y;
     int idx = i * Matrix + j; 
     if ((i < Matrix && j < Matrix && i > 0 && j > 0))
-	    CudaNewArr[idx] = CudaArr[idx] - CudaNewArr[idx];
+	    CudaArrErr[idx] = CudaArr[idx] - CudaNewArr[idx];
 }
 
 // функция востановления границ матрицы
@@ -120,12 +120,12 @@ int main(int argc, char* argv[]) {
 	// Расчитываем ошибку каждую сотую итерацию
 	if (iter % 100 == 0) {
 		subtraction<<<b, t, 0, stream>>>(CudaArr, CudaNewArr, CudaArrErr, Matrix);
-		cub::DeviceReduce::Max(tempStorage, tempStorageSize, CudaArrErr, max_err, Matrix * size_y);
+		cub::DeviceReduce::Max(tempStorage, tempStorageBytes, CudaArrErr, max_err, Matrix * size_y);
 		cudaMemcpy(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost);
 
 		MPI_Allreduce((void*)&max_err,(void*)&max_err, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
 		
-		cudaMemcpyAsync(err, max_err, sizeof(double), cudaMemcpyDeviceToHost, stream); // запись ошибки в переменную на host
+		cudaMemcpyAsync(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost, stream); // запись ошибки в переменную на host
             	// Находим максимальную ошибку среди всех и передаём её всем процессам
 	}
 
