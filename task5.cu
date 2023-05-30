@@ -62,10 +62,11 @@ int main(int argc, char* argv[]) {
     int rank, size;
     /* Initialize the MPI library */
     MPI_Init(&argc,&argv);
-    /* Determine the calling process rank and total number of ranks */
+    /*Определение ранга текущего процесса с помощью функции MPI_Comm_rank. Ранг представляет собой уникальный идентификатор процесса в коммуникаторе*/
     MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+    //Определение общего количества процессов с помощью функции MPI_Comm_size. Эта функция возвращает количество процессов в коммуникаторе MPI_COMM_WORLD.
     MPI_Comm_size(MPI_COMM_WORLD,&size);
-    /* Call MPI routines like MPI_Send, MPI_Recv, ...  Установка текущего устройства CUDA в соответствии с рангом процесса */
+    /* Установка текущего устройства CUDA в соответствии с рангом процесса */
     cudaSetDevice(rank);       
 
     // разрешает доступ к памяти устройства между процессами
@@ -130,7 +131,7 @@ int main(int argc, char* argv[]) {
 		cudaMemcpy(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost);
 		// Использует MPI для выполнения операции редукции MPI_Allreduce
 		//аходит максимальное значение max_err среди всех процессов и сохраняет его обратно в max_err
-		//Это нужно для синхронизации максимальной ошибки между всеми процессами.
+		//Это нужно для синхронизации максимальной ошибки между всеми процессами
 		MPI_Allreduce((void*)&max_err,(void*)&max_err, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
 		//Асинхронно копирует значение max_err с устройства в память хоста
 		//записывая его в переменную err. Операция копирования выполняется в заданном потоке stream.
