@@ -65,14 +65,16 @@ int main(int argc, char* argv[]) {
     /* Determine the calling process rank and total number of ranks */
     MPI_Comm_rank(MPI_COMM_WORLD,&rank);
     MPI_Comm_size(MPI_COMM_WORLD,&size);
-    /* Call MPI routines like MPI_Send, MPI_Recv, ... */
+    /* Call MPI routines like MPI_Send, MPI_Recv, ...  Установка текущего устройства CUDA в соответствии с рангом процесса */
     cudaSetDevice(rank);       
 
+    // разрешает доступ к памяти устройства между процессами
     if (rank != 0)
         cudaDeviceEnablePeerAccess(rank - 1, 0);
     if (rank != (size-1))
         cudaDeviceEnablePeerAccess(rank + 1, 0);
 	
+    //определяем количество строк матрицы, обрабатываемых текущим процессом
     size_t size_y = Matrix / size + 1;
     if (rank != size - 1 && rank != 0) 
 	    size_y += 1;
@@ -89,6 +91,10 @@ int main(int argc, char* argv[]) {
     cudaMallocHost(&A, sizeof(double) * Matrix * Matrix);
     restore<<<b, t>>>(A, Matrix);
 	
+    //Создается переменная offset, которая будет использоваться
+    //для определения смещения при копировании данных из массива
+    //Если rank (ранг текущего процесса) не равен 0, то offset устанавливается равным Matrix
+    //иначе оно остается равным 0. Это нужно для обработки границ матрицы
     size_t offset = (rank != 0) ? Matrix : 0;
     cudaMemcpy(CudaArr, A + (Matrix * Matrix * rank / size) - offset, sizeof(double) * Matrix * size_y, cudaMemcpyHostToDevice);
     cudaMemcpy(CudaNewArr, A + (Matrix * Matrix * rank / size) - offset, sizeof(double) * Matrix * size_y, cudaMemcpyHostToDevice);
@@ -122,18 +128,35 @@ int main(int argc, char* argv[]) {
 		subtraction<<<b, t, 0, stream>>>(CudaArr, CudaNewArr, CudaArrErr, Matrix);
 		cub::DeviceReduce::Max(tempStorage, tempStorageBytes, CudaArrErr, max_err, Matrix * size_y);
 		cudaMemcpy(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost);
-
+		// Использует MPI для выполнения операции редукции MPI_Allreduce
+		//аходит максимальное значение max_err среди всех процессов и сохраняет его обратно в max_err
+		//Это нужно для синхронизации максимальной ошибки между всеми процессами.
 		MPI_Allreduce((void*)&max_err,(void*)&max_err, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-		
+		//Асинхронно копирует значение max_err с устройства в память хоста
+		//записывая его в переменную err. Операция копирования выполняется в заданном потоке stream.
 		cudaMemcpyAsync(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost, stream); // запись ошибки в переменную на host
             	// Находим максимальную ошибку среди всех и передаём её всем процессам
 	}
-
-	if (rank != 0){ // Обмен верхней границей
+	
+	//обеспечивают обмен граничными значениями между процессами, чтобы каждый процесс мог получить 
+	//актуальные значения граничных элементов для своих вычислений.
+	    
+	if (rank != 0){ // Проверяет, что текущий процесс не является процессом с рангом 0 (верхняя граница)
+		//Выполняет обмен данными между текущим процессом и процессом с рангом rank - 1 (процессом выше в решетке)
             	MPI_Sendrecv(CudaNewArr + Matrix + 1, Matrix - 2, MPI_DOUBLE, rank - 1, 0, CudaNewArr + 1, 
 			     Matrix - 2, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		//Указатель на начало данных, которые будут отправлены из текущего процесса (верхняя граница)
+		//количество элементов, которые будут отправлены (исключая граничные элементы)
+		//Тип данных элементов
+		//Ранг процесса-получателя (процесса выше в решетке)
+		//Тег сообщения для идентификации отправленных и принятых сообщений
+		//Указатель на начало буфера, в который будут приняты данные от процесса-отправителя (нижняя граница)
+		//Количество элементов, которые будут приняты (исключая граничные элементы)
+		//MPI_COMM_WORLD: Коммуникатор, который определяет группу процессов, между которыми выполняется обмен
+		//MPI_STATUS_IGNORE: Игнорирует информацию о статусе сообщения
 	}	
-        if (rank != size - 1) { // Обмен нижней границей
+        if (rank != size - 1) { //Проверяет, что текущий процесс не является процессом с рангом size - 1 (нижняя граница)
+		//Выполняет обмен данными между текущим процессом и процессом с рангом rank + 1 (процессом ниже в решетке)
             	MPI_Sendrecv(CudaNewArr + (size_y - 2) * Matrix + 1, Matrix - 2, MPI_DOUBLE, rank + 1, 0, 
 			     CudaNewArr + (size_y - 1) * Matrix + 1, Matrix - 2, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	}    
