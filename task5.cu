@@ -41,13 +41,6 @@ __global__ void restore(double* arr, int size){
 	arr[size * (size - 1) + i] = 20.0 + i * 10.0 / (size - 1);
 }
 
-int find_threads(int size){
-	if (size%32==0)
-		return size/1024;
-
-	return int(size/1024)+1;
-
-}
 
 int main(int argc, char* argv[]) {
     
@@ -81,7 +74,7 @@ int main(int argc, char* argv[]) {
 	    size_y += 1;
 	
     dim3 t(32,32); //определяю количество нитей в каждом блоке
-    dim3 b(find_threads(Matrix), find_threads(Matrix)); // количество блоков
+    dim3 b(t/Matrix, size_y); // количество блоков
 	
     // выделяем память на gpu через cuda для 3 сеток
     double *A, *CudaArr, *CudaNewArr, *CudaArrErr;
@@ -89,7 +82,7 @@ int main(int argc, char* argv[]) {
     cudaMalloc((void **)&CudaNewArr, sizeof(double) * Matrix * size_y);
     cudaMalloc((void **)&CudaArrErr, sizeof(double) * Matrix * size_y);
 
-    cudaMallocHost(&A, sizeof(double) * Matrix * Matrix);
+    double* A = (double*)malloc(Matrix * Matrix * sizeof(double));
     restore<<<b, t>>>(A, Matrix);
 	
     //Создается переменная offset, которая будет использоваться
@@ -117,7 +110,9 @@ int main(int argc, char* argv[]) {
     cudaStreamCreate(&stream);	
 
     // Main loop
-    double err = 1;
+    double* err;
+    cudaMallocHost((void**)&err, sizeof(double));
+    *err = 1.0;
     int iter = 0;
 
     while (err > accuracy && iter < iterations) 
@@ -128,7 +123,7 @@ int main(int argc, char* argv[]) {
 	if (iter % 100 == 0) {
 		subtraction<<<b, t, 0, stream>>>(CudaArr, CudaNewArr, CudaArrErr, Matrix);
 		cub::DeviceReduce::Max(tempStorage, tempStorageBytes, CudaArrErr, max_err, Matrix * size_y);
-		cudaMemcpy(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost);
+		cudaStreamSynchronize(stream);
 		// Использует MPI для выполнения операции редукции MPI_Allreduce
 		//аходит максимальное значение max_err среди всех процессов и сохраняет его обратно в max_err
 		//Это нужно для синхронизации максимальной ошибки между всеми процессами
@@ -138,7 +133,7 @@ int main(int argc, char* argv[]) {
 		cudaMemcpyAsync(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost, stream); // запись ошибки в переменную на host
             	// Находим максимальную ошибку среди всех и передаём её всем процессам
 	}
-	
+	cudaStreamSynchronize(stream);
 	//обеспечивают обмен граничными значениями между процессами, чтобы каждый процесс мог получить 
 	//актуальные значения граничных элементов для своих вычислений.
 	    
