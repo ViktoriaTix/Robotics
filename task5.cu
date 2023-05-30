@@ -133,7 +133,6 @@ int main(int argc, char* argv[]) {
 		cudaMemcpyAsync(&err, max_err, sizeof(double), cudaMemcpyDeviceToHost, stream); // запись ошибки в переменную на host
             	// Находим максимальную ошибку среди всех и передаём её всем процессам
 	}
-	cudaStreamSynchronize(stream);
 	//обеспечивают обмен граничными значениями между процессами, чтобы каждый процесс мог получить 
 	//актуальные значения граничных элементов для своих вычислений.
 	    
@@ -155,7 +154,8 @@ int main(int argc, char* argv[]) {
 		//Выполняет обмен данными между текущим процессом и процессом с рангом rank + 1 (процессом ниже в решетке)
             	MPI_Sendrecv(CudaNewArr + (size_y - 2) * Matrix + 1, Matrix - 2, MPI_DOUBLE, rank + 1, 0, 
 			     CudaNewArr + (size_y - 1) * Matrix + 1, Matrix - 2, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-	}    
+	}  
+	cudaStreamSynchronize(stream);
 	double* c = CudaNewArr; 
         CudaNewArr = CudaArr;
         CudaArr = c;
