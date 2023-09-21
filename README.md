@@ -7,7 +7,7 @@ ros2 run turtlesim turtlesim_node
 
 ros2 run turtlesim turtle_teleop_key
 
-### -- 8 --
+### -- 2.8 --
 
 cd launch/
 
@@ -17,11 +17,11 @@ cd ~/ros2_ws/
 
 ros2 run turtlesim turtle_teleop_key --ros-args --remap turtle1/cmd_vel:=/turtlesim1/turtle1/cmd_vel
 
-### -- 9 --
+### -- 2.9 --
 
 
 
-### -- 10 --
+### -- 2.10 --
 
 ros2 run turtlesim turtlesim_node
 
