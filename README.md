@@ -1,7 +1,7 @@
 ## Robotics
 ros2 service call /clear std_srvs/srv/Empty
 
-# -- Простые команды запуска --
+# Простые команды запуска
 
 ros2 run turtlesim turtlesim_node
 
