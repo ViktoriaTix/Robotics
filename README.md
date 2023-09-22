@@ -19,7 +19,7 @@ ros2 run turtlesim turtle_teleop_key --ros-args --remap turtle1/cmd_vel:=/turtle
 
 ### -- 2.9 --
 
-
+colcon edit my_custom_package FullNameSumService.srv
 
 ### -- 2.10 --
 
