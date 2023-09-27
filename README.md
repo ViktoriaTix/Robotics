@@ -29,3 +29,8 @@ ros2 run py_pubsub turtle_controller
 
 ros2 topic pub /cmd_text std_msgs/String "data: 'move_forward'"
 
+### -- 3.1 --
+
+ros2 run service_full_name service
+
+ros2 run service_full_name client Иванов Иван Иванович
