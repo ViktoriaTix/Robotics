@@ -34,3 +34,12 @@ ros2 topic pub /cmd_text std_msgs/String "data: 'move_forward'"
 ros2 run service_full_name service
 
 ros2 run service_full_name client Иванов Иван Иванович
+
+### -- 3.2 --
+
+colcon build --packages-select python_turtle_commands
+
+ros2 run python_turtle_commands server
+
+ros2 run python_turtle_commands client
+
