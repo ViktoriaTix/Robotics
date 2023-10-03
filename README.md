@@ -43,3 +43,15 @@ ros2 run python_turtle_commands server
 
 ros2 run python_turtle_commands client
 
+### -- 3.3 --
+
+cd /ros2_ws/bag_files/
+
+ros2 bag play turtle_cmd_vel.mcap
+
+ros2 topic echo /turtle1/pose >> pose_speed_x1.yaml
+
+ros2 bag play turtle_cmd_vel.mcap --rate 2.0
+
+ros2 topic echo /turtle1/pose >> pose_speed_x2.yaml
+
