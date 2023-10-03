@@ -47,17 +47,11 @@ class CommandActionServer(Node):
 
         self.flag = 1
         self.publisher_.publish(self.twist)
-        initial_pose = self.before_pose
         
         time.sleep(1)
-
-        distance = 0.0
-        
-        final_pose = self.after_pose
-        distance = math.sqrt((final_pose.x - initial_pose.x)**2 + (final_pose.y - initial_pose.y)**2)
         
         feedback_msg = MessageTurtleCommands.Feedback()
-        feedback_msg.odom = int(distance)
+        feedback_msg.odom = 1
         goal_handle.publish_feedback(feedback_msg)
         
         goal_handle.succeed()
