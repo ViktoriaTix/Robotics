@@ -1,5 +1,7 @@
 # Robotics
 
+ros2 pkg create --build-type ament_cmake <NAME_DIRECT>
+
 ## Простые команды запуска
 
 ros2 run turtlesim turtlesim_node
