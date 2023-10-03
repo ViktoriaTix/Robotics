@@ -1,6 +1,6 @@
 # Robotics
 
-ros2 pkg create --build-type ament_cmake --node-name my_node <NAME_DIRECT>
+ros2 pkg create --build-type ament_python --node-name my_node <NAME_DIRECT>
 
 colcon build --packages-select <NAME_DIRECT>
 
