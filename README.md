@@ -4,6 +4,8 @@ ros2 pkg create --build-type ament_python --node-name my_node <NAME_DIRECT>
 
 colcon build --packages-select <NAME_DIRECT>
 
+source install/setup.bash
+
 ## Простые команды запуска
 
 ros2 run turtlesim turtlesim_node
