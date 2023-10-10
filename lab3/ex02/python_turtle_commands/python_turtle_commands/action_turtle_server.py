@@ -23,7 +23,7 @@ class CommandActionServer(Node):
         self._action_server = ActionServer(
             self,
             MessageTurtleCommands,
-            'execute_turtle_commands',
+            'move_turtle',
             self.execute_callback)
         
         self.subscription = self.create_subscription(Pose, '/turtle1/pose', self.callback, 10)
