@@ -7,7 +7,7 @@ from rclpy.action import ActionServer
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from action_turtle_commands.action import MessageTurtleCommands
-
+import time
 
 class CommandActionServer(Node):
 
@@ -18,6 +18,7 @@ class CommandActionServer(Node):
         self.flag = 0
         self.after_pose = Pose()
         self.before_pose = Pose()
+        self.feedback_time = time.time()  # Добавляем переменную для отслеживания времени
         
         self.publisher_ = self.create_publisher(Twist, '/turtle1/cmd_vel', 10)
         self._action_server = ActionServer(
@@ -45,30 +46,32 @@ class CommandActionServer(Node):
             
         elif goal_handle.request.command == 'turn_left':
             self.twist.linear.x = 0.0
-            self.twist.angular.z = float(goal_handle.request.angle) * math.pi /180
+            self.twist.angular.z = float(goal_handle.request.angle) * math.pi / 180
             
         elif goal_handle.request.command == 'turn_right':
             self.twist.linear.x = 0.0
-            self.twist.angular.z = -float(goal_handle.request.angle) * math.pi /180
+            self.twist.angular.z = -float(goal_handle.request.angle) * math.pi / 180
             
         self.publisher_.publish(self.twist)
         
         feedback_msg = MessageTurtleCommands.Feedback()
         feedback_msg.odom = 0
         
-        while self.flag == 1 and (self.after_pose.linear_velocity==0 or self.after_pose.angular_velocity==0):
+        while self.flag == 1 and (self.after_pose.linear_velocity == 0 or self.after_pose.angular_velocity == 0):
             pass
             
         while self.after_pose.linear_velocity != 0 or self.after_pose.angular_velocity != 0:
-            feedback_msg.odom = int(math.sqrt((self.after_pose.x - self.before_pose.x)**2+(self.after_pose.y - self.before_pose.y)**2))
-            self.get_logger().info('Feedback: {0}'.format(feedback_msg.odom))
-            goal_handle.publish_feedback(feedback_msg)
-            
+            current_time = time.time()  # Получаем текущее время
+            if current_time - self.feedback_time >= 0.5:  # Проверяем, прошла ли секунда
+                feedback_msg.odom = int(math.sqrt((self.after_pose.x - self.before_pose.x) ** 2 + (self.after_pose.y - self.before_pose.y) ** 2))
+                self.get_logger().info('Feedback: {0}'.format(feedback_msg.odom))
+                goal_handle.publish_feedback(feedback_msg)
+                self.feedback_time = current_time  # Обновляем время последнего вывода фидбека
+                
         goal_handle.succeed()
         result = MessageTurtleCommands.Result()
         result.result = True
         return result
-
 
 def main(args=None):
     rclpy.init(args=args)
