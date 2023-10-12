@@ -15,15 +15,15 @@ class ClientNameNode(Node):
         while not self.client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Сервис недоступен, ожидание...')
 
-        self.request = FullNameSumService.Request()
+        self.request = FullNameSumService.Request() # отправка запроса к сервису
 
     def send_request(self, last_name, name, first_name):
         self.request.last_name = last_name
         self.request.name = name
         self.request.first_name = first_name
 
-        future = self.client.call_async(self.request)
-        rclpy.spin_until_future_complete(self, future)
+        future = self.client.call_async(self.request) # асинхронный вызов сервиса
+        rclpy.spin_until_future_complete(self, future) #  ожидаем завершения асинхронного вызова
         return future.result()
 
 def main():
