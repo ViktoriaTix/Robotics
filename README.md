@@ -65,3 +65,9 @@ ros2 topic echo /turtle1/pose >> pose_speed_x2.yaml
 colcon build --packages-select move_to_goal 
 
 ros2 run move_to_goal move 1.0 1.0 90
+
+### -- 4.2 --
+
+colcon build --packages-select my_carrot 
+
+ros2 launch my_carrot dynamic.launch.py
