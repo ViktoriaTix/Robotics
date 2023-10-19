@@ -39,6 +39,8 @@ class FrameListener(Node):
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
+        
+        self.delay = float(self.declare_parameter('delay', '5.0').get_parameter_value().string_value)
 
         # Create a client to spawn a turtle
         self.spawner = self.create_client(Spawn, 'spawn')
@@ -55,7 +57,7 @@ class FrameListener(Node):
         #self.timer = self.create_timer(1.0, lambda: self.on_timer(args))
         self.timer = self.create_timer(1.0, self.on_timer)
 
-    def on_timer(self, args):
+    def on_timer(self):
         # Store frame names in variables that will be used to
         # compute transformations
         from_frame_rel = self.target_frame
@@ -67,7 +69,7 @@ class FrameListener(Node):
                 # and send velocity commands for turtle2 to reach target_frame
                 try:
                     #when = self.get_clock().now() - rclpy.time.Duration(seconds=float(args[2]))
-                    when = self.get_clock().now() - rclpy.time.Duration(seconds=delay)
+                    when = self.get_clock().now() - rclpy.time.Duration(seconds=self.delay)
                     t = self.tf_buffer.lookup_transform_full(
                         target_frame=to_frame_rel,
                         target_time=rclpy.time.Time(),
