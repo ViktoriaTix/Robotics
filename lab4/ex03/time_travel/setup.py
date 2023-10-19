@@ -23,8 +23,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'turtle_tf2_broadcaster = learning_tf2_py.turtle_tf2_broadcaster:main',
-            'turtle_tf2_listener = learning_tf2_py.turtle_tf2_listener:main',
+            'turtle_tf2_broadcaster = time_travel.turtle_tf2_broadcaster:main',
+            'turtle_tf2_listener = time_travel.turtle_tf2_listener:main',
         ],
     },
 )
