@@ -11,3 +11,9 @@ colcon build --packages-select task3
 ros2 launch task3 diff_drive.launch.py
 
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/robot/cmd_vel
+
+### -- 5.4 --
+
+colcon build --packages-select circle_movement
+
+ros2 launch circle_movement circle_movement.launch.py
