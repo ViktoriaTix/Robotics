@@ -22,3 +22,5 @@ ros2 launch circle_movement circle_movement.launch.py
 
 colcon build --packages-select robot_bibi
 
+ros2 launch robot_bibi diff_drive.launch.py
+
