@@ -20,7 +20,13 @@ ros2 launch circle_movement circle_movement.launch.py
 
 ### -- 5.5 --
 
+export GZ_SIM_RESOURCE_PATH=$GZ_SIM_RESOURCE_PATH:/home/vikatop/ros2_ws/install/robot_bibi/share/robot_bibi/details
+
+echo $GZ_SIM_RESOURCE_PATH
+
 colcon build --packages-select robot_bibi
 
 ros2 launch robot_bibi diff_drive.launch.py
+
+
 
