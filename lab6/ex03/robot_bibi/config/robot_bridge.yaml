@@ -60,7 +60,7 @@
   gz_type_name: "gz.msgs.Image"
   direction: GZ_TO_ROS
 - ros_topic_name: "/bibi/imu"
-  gz_topic_name: "/world/empty/model/bibi/link/base_link/sensor/imu_link/imu"
+  gz_topic_name: "/world/empty/model/bibi/link/base_link/sensor/imu_sensor/imu"
   ros_type_name: "sensor_msgs/msg/Imu"
   gz_type_name: "gz.msgs.IMU"
   direction: GZ_TO_ROS
